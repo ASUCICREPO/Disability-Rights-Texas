@@ -1,0 +1,181 @@
+import CONFIG from '../config';
+
+/**
+ * Service for interacting with Amazon Q Business API
+ */
+class AmazonQService {
+  // Static properties to store the latest message and conversation IDs
+  static lastSystemMessageId = '';
+  static lastConversationId = '';
+  /**
+   * Send a message to Amazon Q Business API
+   * @param {string} message - The user's message
+   * @param {string} language - The language code (EN or ES)
+   * @param {string|null} conversationId - The conversation ID for threading (optional)
+   * @param {string|null} parentMessageId - The parent message ID for threading (optional)
+   * @param {string} ageGroup - The age group ('child' or 'adult') (optional)
+   * @returns {Promise} - Promise resolving to the API response
+   */
+  static async sendMessage(message, language = 'EN', conversationId = null, parentMessageId = null, ageGroup = 'adult') {
+    try {
+      // Construct request body with age-appropriate instructions
+      const requestBody = { 
+        message: ageGroup === 'child' 
+          ? `[Please explain this in clear and simple english terms] ${message}`
+          : message,
+        language
+      };
+      
+      // Add conversation threading parameters if they exist
+      if (conversationId) {
+        requestBody.conversationId = conversationId;
+      }
+      
+      if (parentMessageId) {
+        requestBody.parentMessageId = parentMessageId;
+      }
+      
+      // Log request details
+      console.log('Amazon Q API Request:', {
+        endpoint: CONFIG.api.endpoint,
+        requestBody,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Make API request
+      const startTime = performance.now();
+      const response = await fetch(CONFIG.api.endpoint, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+      
+      const responseTime = performance.now() - startTime;
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Store the message and conversation IDs for feedback
+      this.lastSystemMessageId = data.systemMessageId || '';
+      this.lastConversationId = data.conversationId || '';
+      
+      // Check if the response is "No answer is found" (case-insensitive)
+      const isNoAnswerFound = data.systemMessage && 
+        data.systemMessage.toLowerCase().includes("no answer is found");
+      
+      // If it's a no-answer response, replace with custom message
+      if (isNoAnswerFound) {
+        console.log('No answer found - replacing message and clearing sources');
+        data.systemMessage = language === 'ES' 
+          ? "Lo siento, pero no encuentro información relacionada con su solicitud. ¿Podría reformular su pregunta o darme más contexto para poder ayudarle mejor?"
+          : "I'm sorry, but I'm not finding any information related to your request. Could you please rephrase your question or give me additional context so I can help you more effectively?";
+        data.sourceAttributions = []; // Clear any source attributions
+        data.isNoAnswerFound = true;
+      } else {
+        data.isNoAnswerFound = false;
+      }
+      
+      // Log full response for debugging
+      console.log('Amazon Q API Full Response:', {
+        ...data,
+        hasSystemMessageId: !!data.systemMessageId,
+        hasConversationId: !!data.conversationId,
+        isNoAnswerFound: data.isNoAnswerFound,
+        originalMessage: data.systemMessage,
+        hasSources: data.sourceAttributions && data.sourceAttributions.length > 0
+      });
+      
+      // Log response details
+      console.log('Amazon Q API Response:', {
+        status: response.status,
+        responseTime: `${responseTime.toFixed(2)}ms`,
+        language: language,
+        conversationId: data.conversationId || 'none',
+        systemMessageId: data.systemMessageId || 'none',
+        userMessageId: data.userMessageId || 'none',
+        systemMessage: data.systemMessage ? `${data.systemMessage.substring(0, 50)}...` : 'none',
+        hasSourceAttributions: !!data.sourceAttributions && data.sourceAttributions.length > 0,
+        isNoAnswerFound: data.isNoAnswerFound,
+        timestamp: new Date().toISOString()
+      });
+      
+      return data;
+    } catch (error) {
+      console.error('Amazon Q API Error:', {
+        message: error.message,
+        timestamp: new Date().toISOString()
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Send feedback to Amazon Q Business API
+   * @param {string} feedback - The feedback type ('UPVOTED' or 'DOWNVOTED')
+   * @param {string} messageId - The ID of the message being rated
+   * @param {string} conversationId - The ID of the conversation
+   * @returns {Promise} - Promise resolving to the API response
+   */
+  static async sendFeedback(feedback, messageId, conversationId) {
+    try {
+      // Use the application ID from CONFIG or fall back to the default
+      const applicationId = CONFIG.api.applicationId;
+      console.log("Using application ID:", applicationId);
+  
+      
+      if (!messageId || !conversationId) {
+        console.error('Missing required IDs for feedback');
+        return { success: false, error: 'Missing message or conversation ID' };
+      }
+
+      // Construct the feedback endpoint URL with the required parameters
+      const feedbackEndpoint = CONFIG.api.feedbackEndpoint
+        .replace('{applicationId}', applicationId)
+        .replace('{conversationId}', conversationId)
+        .replace('{messageId}', messageId);
+
+      // Map UI feedback values to API values
+      const usefulness = feedback === 'UPVOTED' ? 'USEFUL' : 'NOT_USEFUL';
+
+      // Create the request body with both required fields
+      const requestBody = {
+        messageUsefulness: {
+          usefulness,
+          submittedAt: new Date().toISOString()
+        },
+        messageCopiedAt: new Date().toISOString() // Required field
+      };
+
+      console.log('Sending feedback to:', feedbackEndpoint);
+      console.log('Feedback request body:', requestBody);
+
+      const response = await fetch(feedbackEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
+        throw new Error(errorData.error || `Feedback API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Feedback recorded successfully:', result);
+      return { success: true, ...result };
+    } catch (error) {
+      console.error('Feedback API error:', error);
+      return { success: false, error: error.message };
+    }
+  }
+}
+
+export default AmazonQService;
