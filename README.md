@@ -18,6 +18,9 @@
     - [3. Deploy Frontend](#3-deploy-frontend)
   - [Environment Configuration](#environment-configuration)
     - [1. Local Development Setup](#1-local-development-setup)
+  - [Docker Deployment](#docker-deployment)
+    - [1. Using Docker](#1-using-docker)
+    - [2. Using Docker Compose](#2-using-docker-compose)
   - [Troubleshooting](#troubleshooting)
     - [Common Issues](#common-issues)
 
@@ -169,6 +172,37 @@ In Amplify Console:
    npm start
    ```
 
+## Docker Deployment
+
+### 1. Using Docker
+
+You can build and run the application using Docker:
+
+```bash
+# Build the Docker image
+docker build -t disability-rights-chat .
+
+# Run the container
+docker run -p 3000:3000 --env-file .env disability-rights-chat
+```
+
+### 2. Using Docker Compose
+
+For a more streamlined setup, use Docker Compose:
+
+```bash
+# Start the application
+docker-compose up
+
+# Run in detached mode
+docker-compose up -d
+
+# Stop the application
+docker-compose down
+```
+
+Make sure your `.env` file contains all the necessary environment variables as listed in the Environment Configuration section.
+
 ## Troubleshooting
 
 ### Common Issues
@@ -187,3 +221,8 @@ In Amplify Console:
    - Check CloudFormation stack events
    - Verify IAM permissions
    - Review Amplify build logs
+
+4. **Docker Issues**
+   - Ensure Docker is installed and running
+   - Check if ports are already in use
+   - Verify environment variables are properly passed to the container
