@@ -1,15 +1,25 @@
 # Disability Rights Texas Chat Application
 
 ## Table of Contents
-1. [Prerequisites](#prerequisites)
-2. [AWS Account Setup](#aws-account-setup)
-3. [Amazon Q Business Setup](#amazon-q-business-setup)
-4. [Backend Deployment](#backend-deployment)
-5. [Frontend Deployment](#frontend-deployment)
-6. [Environment Configuration](#environment-configuration)
-7. [Security Considerations](#security-considerations)
-8. [Local Development](#local-development)
-9. [Troubleshooting](#troubleshooting)
+- [Disability Rights Texas Chat Application](#disability-rights-texas-chat-application)
+  - [Table of Contents](#table-of-contents)
+  - [Prerequisites](#prerequisites)
+  - [AWS Account Setup](#aws-account-setup)
+    - [1. Create AWS Account](#1-create-aws-account)
+    - [2. Set Up IAM User](#2-set-up-iam-user)
+  - [Amazon Q Business Setup](#amazon-q-business-setup)
+    - [1. Enable Amazon Q Business](#1-enable-amazon-q-business)
+    - [2. Configure Application Settings](#2-configure-application-settings)
+  - [Backend Deployment](#backend-deployment)
+    - [1. Deploy CloudFormation Stack](#1-deploy-cloudformation-stack)
+  - [Frontend Deployment](#frontend-deployment)
+    - [1. Set Up AWS Amplify](#1-set-up-aws-amplify)
+    - [2. Configure Environment Variables](#2-configure-environment-variables)
+    - [3. Deploy Frontend](#3-deploy-frontend)
+  - [Environment Configuration](#environment-configuration)
+    - [1. Local Development Setup](#1-local-development-setup)
+  - [Troubleshooting](#troubleshooting)
+    - [Common Issues](#common-issues)
 
 ## Prerequisites
 
@@ -177,53 +187,3 @@ In Amplify Console:
    - Check CloudFormation stack events
    - Verify IAM permissions
    - Review Amplify build logs
-
-### Support
-
-For technical support:
-1. Check AWS documentation
-2. Review CloudFormation stack events
-3. Contact AWS support if needed
-
-## Security Considerations
-
-1. **API Keys and Secrets**
-   - Store securely in AWS Secrets Manager
-   - Rotate keys regularly
-   - Use IAM roles where possible
-   - Never commit `.env` files to the repository
-   - Use environment variables for all sensitive information
-
-2. **Data Protection**
-   - Enable encryption at rest
-   - Use HTTPS for all communications
-   - Implement proper access controls
-   - Follow the principle of least privilege
-
-3. **Monitoring**
-   - Set up CloudWatch alarms
-   - Monitor API usage
-   - Track error rates
-   - Enable AWS CloudTrail for auditing
-
-4. **Local Development**
-   - Refer to [SECURITY.md](SECURITY.md) for detailed security guidelines
-   - Use different API keys for development and production
-   - Regularly update dependencies to patch security vulnerabilities
-
-## Maintenance
-
-1. **Regular Updates**
-   - Keep dependencies updated
-   - Monitor AWS service updates
-   - Review security patches
-
-2. **Backup**
-   - Regular database backups
-   - Configuration backups
-   - Document changes
-
-3. **Scaling**
-   - Monitor usage patterns
-   - Adjust resources as needed
-   - Plan for growth
