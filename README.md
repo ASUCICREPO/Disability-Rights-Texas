@@ -60,11 +60,3 @@ npm install
 # Create .env file with required environment variables
 npm start
 ```
-
-## License
-
-[Include license information here]
-
-## Contact
-
-[Include contact information here]
