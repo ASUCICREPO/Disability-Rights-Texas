@@ -557,23 +557,46 @@ phases:
 
   post_build:
     commands:
-      - echo "🚀 Creating or using Amplify app"
-      - >
-        AMPLIFY_APP_ID=$(aws amplify list-apps --region $REGION \
-          --query "apps[?name=='DisabilityRightsTexas'].appId" --output text);
+      - echo "🚧 Initializing Amplify app and branch"
+      - AMPLIFY_APP_ID=$(aws amplify list-apps --region $REGION \
+          --query "apps[?name=='DisabilityRightsTexas'].appId" --output text)
+
+      - |
         if [ -z "$AMPLIFY_APP_ID" ]; then
-          echo "Creating new Amplify app";
+          echo "📗 Creating new Amplify app"
           AMPLIFY_APP_ID=$(aws amplify create-app \
             --name "DisabilityRightsTexas" \
             --region $REGION \
-            --query "app.appId" --output text);
+            --query "app.appId" --output text)
         else
-          echo "Using existing Amplify App ID: $AMPLIFY_APP_ID";
+          echo "✅ Using existing Amplify App ID: $AMPLIFY_APP_ID"
         fi
-      - echo "🌿 Creating Amplify branch if not exist"
-      - aws amplify create-branch --app-id $AMPLIFY_APP_ID --branch-name $AMPLIFY_BRANCH_NAME --region $REGION || echo "✅ Branch may already exist"
+
+      - echo "🔄 Checking or creating Amplify branch"
+      - |
+        aws amplify create-branch \
+          --app-id $AMPLIFY_APP_ID \
+          --branch-name $AMPLIFY_BRANCH_NAME \
+          --region $REGION || echo "✅ Branch may already exist"
+
+      - echo "⏹ Stopping previous deployment job if running"
+      - |
+        LAST_JOB_ID=$(aws amplify list-jobs \
+          --app-id $AMPLIFY_APP_ID \
+          --branch-name $AMPLIFY_BRANCH_NAME \
+          --region $REGION \
+          --query "jobSummaries[?status=='PENDING' || status=='PROVISIONING' || status=='RUNNING'].jobId" \
+          --output text)
+
+        if [ -n "$LAST_JOB_ID" ]; then
+          aws amplify stop-job --app-id $AMPLIFY_APP_ID \
+            --branch-name $AMPLIFY_BRANCH_NAME \
+            --job-id $LAST_JOB_ID \
+            --region $REGION
+        fi
+
       - echo "📤 Creating deployment for Amplify app"
-      - >
+      - |
         DEPLOYMENT_INFO=$(aws amplify create-deployment \
           --app-id $AMPLIFY_APP_ID \
           --branch-name $AMPLIFY_BRANCH_NAME \
@@ -591,6 +614,7 @@ phases:
           --branch-name $AMPLIFY_BRANCH_NAME \
           --job-id $JOB_ID \
           --region $REGION
+
       - echo "🔗 Your deployed frontend will be available at:"
       - echo "https://$AMPLIFY_BRANCH_NAME.$AMPLIFY_APP_ID.amplifyapp.com"
 
