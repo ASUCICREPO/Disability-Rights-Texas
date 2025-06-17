@@ -15,14 +15,14 @@ phases:
       - echo "Installing dependencies"
       - npm install -g aws-cli
       - npm install -g @aws-amplify/cli
-  
+
   pre_build:
     commands:
       - echo "Pre-build phase"
       - sed -i.bak "s/{applicationId}/$APPLICATION_ID/g" template.json || echo "Template replacement skipped"
       - echo "Creating environment file"
       - cd frontend
-      - |
+      - >
         cat > .env << EOF
         # API Configuration
         REACT_APP_BASE_API_ENDPOINT=$API_ENDPOINT
@@ -32,13 +32,13 @@ phases:
         REACT_APP_LAMBDA_FUNCTION=$CHAT_LAMBDA
         REACT_APP_LAMBDA_FEEDBACK_FUNCTION=$FEEDBACK_LAMBDA
         REACT_APP_APPLICATION_ID=$APPLICATION_ID
-        
+
         # Language Configuration
         REACT_APP_DEFAULT_LANGUAGE=EN
         EOF
       - echo "Installing frontend dependencies"
       - npm install
-  
+
   build:
     commands:
       - echo "Building React application"
@@ -59,7 +59,7 @@ phases:
       - aws s3 presign s3://$ARTIFACT_BUCKET/build.zip --expires-in 3600 > presigned-url.txt
       - export SOURCE_URL=$(cat presigned-url.txt)
       - echo "Deploying to Amplify"
-      - |
+      - >
         if [ -n "$AMPLIFY_APP_ID" ]; then
           echo "Using existing Amplify app ID: $AMPLIFY_APP_ID"
           aws amplify start-job --app-id $AMPLIFY_APP_ID --branch-name main --job-type RELEASE --source-url $SOURCE_URL
@@ -70,7 +70,7 @@ phases:
           aws amplify start-job --app-id $AMPLIFY_APP_ID --branch-name main --job-type RELEASE --source-url $SOURCE_URL
           echo "Created Amplify app with ID: $AMPLIFY_APP_ID"
         fi
-  
+
   post_build:
     commands:
       - echo "Deployment completed"
