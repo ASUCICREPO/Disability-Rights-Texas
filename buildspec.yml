@@ -348,51 +348,37 @@ phases:
 
   post_build:
     commands:
-      - echo "Zipping build"
-      - cd frontend/build && zip -r ../../build.zip . && cd ../..
-
-      - echo "Checking or creating Amplify app"
+      - echo "Creating or using Amplify app"
       - |
-        AMPLIFY_APP_ID=$(aws amplify list-apps \
-          --region $REGION \
-          --query "apps[?name=='DisabilityRightsApp'].appId" \
-          --output text)
-
         if [ -z "$AMPLIFY_APP_ID" ]; then
           echo "Creating new Amplify app"
           AMPLIFY_APP_ID=$(aws amplify create-app \
-            --name "DisabilityRightsApp" \
+            --name "DisabilityRightsFrontend" \
             --region $REGION \
-            --repository "https://github.com/placeholder/repo" \
             --query "app.appId" \
             --output text)
-        else
-          echo "Amplify app already exists: $AMPLIFY_APP_ID"
-        fi
 
-        echo "Checking or creating Amplify branch"
-        BRANCH_EXISTS=$(aws amplify list-branches \
-          --app-id $AMPLIFY_APP_ID \
-          --region $REGION \
-          --query "branches[?branchName=='$AMPLIFY_BRANCH_NAME'].branchName" \
-          --output text)
+          if [ -z "$AMPLIFY_APP_ID" ]; then
+            echo "❌ Failed to create Amplify app"
+            exit 1
+          fi
 
-        if [ -z "$BRANCH_EXISTS" ]; then
+          echo "Creating branch $AMPLIFY_BRANCH_NAME"
           aws amplify create-branch \
             --app-id $AMPLIFY_APP_ID \
-            --branch-name $AMPLIFY_BRANCH_NAME \
-            --region $REGION
+            --branch-name $AMPLIFY_BRANCH_NAME
+        else
+          echo "Using existing Amplify app ID: $AMPLIFY_APP_ID"
         fi
 
-        echo "Triggering Amplify build"
-        aws amplify start-job \
+      - echo "Triggering Amplify deployment"
+      - aws amplify start-job \
           --app-id $AMPLIFY_APP_ID \
           --branch-name $AMPLIFY_BRANCH_NAME \
-          --job-type RELEASE \
-          --region $REGION
+          --job-type RELEASE
 
-        echo "🔗 Your deployed frontend will be available at:"
-        echo "https://$AMPLIFY_BRANCH_NAME.$AMPLIFY_APP_ID.amplifyapp.com"
+      - echo "🔗 Your deployed frontend will be available at:"
+      - echo "https://$AMPLIFY_BRANCH_NAME.$AMPLIFY_APP_ID.amplifyapp.com"
 
 artifacts:
   base-directory: frontend/build
