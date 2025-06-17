@@ -85,6 +85,7 @@
 #   paths:
 #     - "frontend/node_modules/**/*"
 
+
 version: 0.2
 
 env:
@@ -97,26 +98,18 @@ phases:
     runtime-versions:
       nodejs: 16
     commands:
-      - echo "Installing required tools"
+      - echo "Installing jq and aws-cli"
       - yum install -y jq
       - npm install -g aws-cli
 
   build:
     commands:
-      - echo "Deploying CloudFormation template from template.json"
-      - aws cloudformation deploy \
-          --template-file template.json \
-          --stack-name $STACK_NAME \
-          --capabilities CAPABILITY_NAMED_IAM \
-          --region $REGION
+      - echo "Deploying CloudFormation template"
+      - aws cloudformation deploy --template-file template.json --stack-name $STACK_NAME --capabilities CAPABILITY_NAMED_IAM --region $REGION
 
-      - echo "Retrieving stack outputs"
+      - echo "Fetching CloudFormation outputs"
       - |
-        OUTPUTS=$(aws cloudformation describe-stacks \
-          --stack-name $STACK_NAME \
-          --region $REGION \
-          --query "Stacks[0].Outputs" \
-          --output json)
+        OUTPUTS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --region $REGION --query "Stacks[0].Outputs" --output json)
 
         CHAT_API=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="ChatApiEndpoint") | .OutputValue')
         FEEDBACK_API=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="FeedbackApiEndpoint") | .OutputValue')
@@ -124,7 +117,7 @@ phases:
         FEEDBACK_LAMBDA=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="FeedbackLambdaFunction") | .OutputValue')
         APPLICATION_ID=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="ApplicationId") | .OutputValue')
 
-        echo "Generating frontend/.env file"
+        echo "Creating .env file"
         mkdir -p frontend
         cat > frontend/.env << EOF
         REACT_APP_BASE_API_ENDPOINT=$CHAT_API
@@ -141,3 +134,4 @@ artifacts:
   base-directory: frontend
   files:
     - .env
+
