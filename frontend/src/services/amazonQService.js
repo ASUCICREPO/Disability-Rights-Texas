@@ -123,10 +123,13 @@ class AmazonQService {
    */
   static async sendFeedback(feedback, messageId, conversationId) {
     try {
-      // Use the application ID from CONFIG or fall back to the default
-      const applicationId = CONFIG.api.applicationId;
+      // Use the application ID from CONFIG or fall back to a default value
+      const applicationId = CONFIG.api.applicationId || 'default-app-id';
       console.log("Using application ID:", applicationId);
-  
+      
+      if (!applicationId || applicationId === 'undefined') {
+        throw new Error('Empty value provided for input HTTP label: applicationId');
+      }
       
       if (!messageId || !conversationId) {
         console.error('Missing required IDs for feedback');

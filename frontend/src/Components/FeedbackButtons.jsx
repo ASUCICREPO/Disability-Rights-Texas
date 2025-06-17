@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import AmazonQService from '../services/amazonQService';
+import CONFIG from '../config';
 
 /**
  * Component for upvote and downvote buttons
@@ -9,7 +10,7 @@ function FeedbackButtons({ messageId, conversationId }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Application ID from environment or default
-  const applicationId = process.env.REACT_APP_AMAZON_Q_APP_ID || 'default-app-id';
+  const applicationId = CONFIG.api.applicationId || 'default-app-id';
   
   // Handle feedback submission
   const handleFeedback = async (type) => {
