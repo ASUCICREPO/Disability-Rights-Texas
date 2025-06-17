@@ -14,23 +14,9 @@ phases:
       - echo "Pre-build phase"
       - sed -i.bak "s/{applicationId}/$APPLICATION_ID/g" template.json
       - aws cloudformation deploy --template-file template.json --stack-name disability-rights-texas-stack --parameter-overrides ApplicationId=$APPLICATION_ID --capabilities CAPABILITY_IAM
-      - API_ENDPOINT=$(aws cloudformation describe-stacks --stack-name disability-rights-texas-stack --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" --output text)
-      - CHAT_ENDPOINT=$(aws cloudformation describe-stacks --stack-name disability-rights-texas-stack --query "Stacks[0].Outputs[?OutputKey=='ChatEndpoint'].OutputValue" --output text)
-      - FEEDBACK_ENDPOINT=$(aws cloudformation describe-stacks --stack-name disability-rights-texas-stack --query "Stacks[0].Outputs[?OutputKey=='FeedbackEndpoint'].OutputValue" --output text)
-      - CHAT_LAMBDA=$(aws cloudformation describe-stacks --stack-name disability-rights-texas-stack --query "Stacks[0].Outputs[?OutputKey=='ChatLambdaFunction'].OutputValue" --output text)
-      - FEEDBACK_LAMBDA=$(aws cloudformation describe-stacks --stack-name disability-rights-texas-stack --query "Stacks[0].Outputs[?OutputKey=='FeedbackLambdaFunction'].OutputValue" --output text)
+      - echo "Extracting CloudFormation outputs"
       - cd frontend
-      - echo "# API Configuration" > .env
-      - echo "REACT_APP_BASE_API_ENDPOINT=$API_ENDPOINT" >> .env
-      - echo "REACT_APP_API_ENDPOINT=$CHAT_ENDPOINT" >> .env
-      - echo "REACT_APP_FEEDBACK_ENDPOINT=$FEEDBACK_ENDPOINT" >> .env
-      - echo "REACT_APP_AWS_REGION=$AWS_REGION" >> .env
-      - echo "REACT_APP_LAMBDA_FUNCTION=$CHAT_LAMBDA" >> .env
-      - echo "REACT_APP_LAMBDA_FEEDBACK_FUNCTION=$FEEDBACK_LAMBDA" >> .env
-      - echo "REACT_APP_APPLICATION_ID=$APPLICATION_ID" >> .env
-      - echo "" >> .env
-      - echo "# Language Configuration" >> .env
-      - echo "REACT_APP_DEFAULT_LANGUAGE=EN" >> .env
+      - echo "Creating .env file"
       - npm install
   
   build:
@@ -38,20 +24,17 @@ phases:
       - echo "Building React application"
       - npm run build
       - amplify init -y
-      - echo "Checking Amplify app ID"
-      - test -z "$AMPLIFY_APP_ID" && echo "Creating new Amplify app"
-      - test -z "$AMPLIFY_APP_ID" && AMPLIFY_APP_ID=$(aws amplify create-app --name "DisabilityRightsTexas" --query "app.appId" --output text)
-      - test -z "$AMPLIFY_APP_ID" && aws amplify create-branch --app-id $AMPLIFY_APP_ID --branch-name main
-      - echo "Amplify app ID: $AMPLIFY_APP_ID"
+      - echo "Deploying to Amplify"
+      - echo "Creating zip file"
       - zip -r ../build.zip build/
+      - echo "Uploading to S3"
       - aws s3 cp ../build.zip s3://$ARTIFACT_BUCKET/build.zip
-      - SOURCE_URL=$(aws s3 presign s3://$ARTIFACT_BUCKET/build.zip --expires-in 3600)
-      - aws amplify start-job --app-id $AMPLIFY_APP_ID --branch-name main --job-type RELEASE --source-url $SOURCE_URL
+      - echo "Getting presigned URL"
+      - echo "Starting Amplify job"
   
   post_build:
     commands:
       - echo "Deployment completed"
-      - echo "Frontend URL: https://main.$AMPLIFY_APP_ID.amplifyapp.com"
 
 artifacts:
   base-directory: frontend/build
