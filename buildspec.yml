@@ -45,7 +45,7 @@ phases:
       - echo Building React application...
       - npm run build
       - echo Setting up Amplify deployment...
-      - amplify init --amplify "{\"envName\":\"prod\"}" --yes
+      - amplify init --amplify '{"envName":"prod"}' --yes
       - echo "Deploying to Amplify..."
       - if [ -z "$AMPLIFY_APP_ID" ]; then echo "Creating new Amplify app..."; AMPLIFY_APP_ID=$(aws amplify create-app --name "DisabilityRightsTexas" --query "app.appId" --output text); aws amplify create-branch --app-id $AMPLIFY_APP_ID --branch-name main; echo "Created Amplify app with ID: $AMPLIFY_APP_ID"; else echo "Using existing Amplify app ID: $AMPLIFY_APP_ID"; fi
       - SOURCE_URL=$(zip -r ../build.zip build/ && aws s3 cp ../build.zip s3://$ARTIFACT_BUCKET/build.zip && aws s3 presign s3://$ARTIFACT_BUCKET/build.zip --expires-in 3600)
