@@ -343,44 +343,42 @@ phases:
 
   build:
     commands:
-      - echo "Building React app"
-      - cd frontend && npm run build && cd ..
+      - echo "Building frontend"
+      - npm run build
+      - echo "Zipping build output"
+      - cd build && zip -r ../build.zip . && cd ..
 
   post_build:
     commands:
-      - echo "Creating or using Amplify app"
+      - echo "Creating Amplify app and branch if not exist"
+      - export AMPLIFY_APP_ID=$(aws amplify list-apps --region $REGION \
+          --query "apps[?name=='DisabilityRightsTexas'].appId" --output text)
       - |
         if [ -z "$AMPLIFY_APP_ID" ]; then
           echo "Creating new Amplify app"
-          export AMPLIFY_APP_ID=$(aws amplify create-app \
-            --name "DisabilityRightsFrontend" \
+          AMPLIFY_APP_ID=$(aws amplify create-app \
+            --name "DisabilityRightsTexas" \
             --region $REGION \
-            --query "app.appId" \
-            --output text)
-
-          echo "Amplify App ID: $AMPLIFY_APP_ID"
-
-          aws amplify create-branch \
-            --app-id $AMPLIFY_APP_ID \
-            --branch-name $AMPLIFY_BRANCH_NAME
+            --query "app.appId" --output text)
         else
-          echo "Using existing Amplify app ID: $AMPLIFY_APP_ID"
+          echo "Using existing Amplify App ID: $AMPLIFY_APP_ID"
         fi
-
+      - echo "Amplify App ID: $AMPLIFY_APP_ID"
+      - echo "Checking or creating Amplify branch"
+      - aws amplify create-branch --app-id $AMPLIFY_APP_ID --branch-name $AMPLIFY_BRANCH_NAME --region $REGION || echo "Branch may already exist"
+      - echo "Creating deployment for Amplify app"
+      - DEPLOYMENT_URL=$(aws amplify create-deployment \
+          --app-id $AMPLIFY_APP_ID \
+          --branch-name $AMPLIFY_BRANCH_NAME \
+          --region $REGION \
+          --query "zipUploadUrl" --output text)
+      - echo "Uploading build.zip to Amplify"
+      - curl -T build.zip "$DEPLOYMENT_URL"
       - echo "Triggering Amplify deployment"
-      - |
-        if [ -n "$AMPLIFY_APP_ID" ]; then
-          aws amplify start-job \
-            --app-id $AMPLIFY_APP_ID \
-            --branch-name $AMPLIFY_BRANCH_NAME \
-            --job-type RELEASE
-            echo "🔗 Your deployed frontend will be available at:"
-            echo "https://$AMPLIFY_BRANCH_NAME.$AMPLIFY_APP_ID.amplifyapp.com"
-        else
-          echo "❌ AMPLIFY_APP_ID not set, skipping deployment"
-          exit 1
-        fi
-
+      - aws amplify start-deployment \
+          --app-id $AMPLIFY_APP_ID \
+          --branch-name $AMPLIFY_BRANCH_NAME \
+          --region $REGION
       - echo "🔗 Your deployed frontend will be available at:"
       - echo "https://$AMPLIFY_BRANCH_NAME.$AMPLIFY_APP_ID.amplifyapp.com"
 
