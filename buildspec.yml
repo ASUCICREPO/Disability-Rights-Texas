@@ -486,6 +486,147 @@
 #   paths:
 #     - "frontend/node_modules/**/*"
 
+# version: 0.2
+
+# env:
+#   variables:
+#     STACK_NAME: "disability-rights-api-stack"
+#     REGION: "us-west-2"
+#     AMPLIFY_BRANCH_NAME: "main"
+
+# phases:
+#   install:
+#     runtime-versions:
+#       nodejs: 16
+#     commands:
+#       - echo "🔧 Installing tools"
+#       - yum install -y jq zip
+#       - npm install -g aws-cli
+#       - npm install -g @aws-amplify/cli
+
+#   pre_build:
+#     commands:
+#       - echo "🔍 Checking CloudFormation stack"
+#       - |
+#         if aws cloudformation describe-stacks --stack-name $STACK_NAME --region $REGION > /dev/null 2>&1; then
+#           echo "✅ Stack exists"
+#         else
+#           echo "🚀 Deploying backend CloudFormation stack"
+#           aws cloudformation deploy \
+#             --template-file template.json \
+#             --stack-name $STACK_NAME \
+#             --capabilities CAPABILITY_NAMED_IAM \
+#             --region $REGION
+#         fi
+#       - echo "📦 Fetching CloudFormation outputs"
+#       - |
+#         OUTPUTS=$(aws cloudformation describe-stacks \
+#           --stack-name $STACK_NAME \
+#           --region $REGION \
+#           --query "Stacks[0].Outputs" \
+#           --output json)
+
+#         API_ENDPOINT=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="ApiEndpoint") | .OutputValue')
+#         CHAT_ENDPOINT=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="ChatEndpoint") | .OutputValue')
+#         FEEDBACK_ENDPOINT=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="FeedbackEndpoint") | .OutputValue')
+#         CHAT_LAMBDA=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="ChatLambdaFunction") | .OutputValue')
+#         FEEDBACK_LAMBDA=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="FeedbackLambdaFunction") | .OutputValue')
+#         APPLICATION_ID=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="ApplicationId") | .OutputValue')
+
+#         echo "🌍 Generating .env file"
+#         mkdir -p frontend
+#         cat > frontend/.env <<EOF
+#           REACT_APP_BASE_API_ENDPOINT=$API_ENDPOINT
+#           REACT_APP_API_ENDPOINT=$CHAT_ENDPOINT
+#           REACT_APP_FEEDBACK_ENDPOINT=$FEEDBACK_ENDPOINT
+#           REACT_APP_AWS_REGION=$REGION
+#           REACT_APP_LAMBDA_FUNCTION=$CHAT_LAMBDA
+#           REACT_APP_LAMBDA_FEEDBACK_FUNCTION=$FEEDBACK_LAMBDA
+#           REACT_APP_APPLICATION_ID=$APPLICATION_ID
+#           REACT_APP_DEFAULT_LANGUAGE=EN
+#           EOF
+#       - echo "📦 Installing frontend dependencies"
+#       - cd frontend && npm install && cd ..
+
+#   build:
+#     commands:
+#       - echo "🏗️ Building frontend"
+#       - cd frontend && npm run build && cd ..
+#       - echo "📦 Zipping build output"
+#       - cd frontend/build && zip -r ../../build.zip . && cd ../..
+
+#   post_build:
+#     commands:
+#       - echo "🚧 Initializing Amplify app and branch"
+#       - AMPLIFY_APP_ID=$(aws amplify list-apps --region $REGION \
+#           --query "apps[?name=='DisabilityRightsTexas'].appId" --output text)
+
+#       - |
+#         if [ -z "$AMPLIFY_APP_ID" ]; then
+#           echo "📗 Creating new Amplify app"
+#           AMPLIFY_APP_ID=$(aws amplify create-app \
+#             --name "DisabilityRightsTexas" \
+#             --region $REGION \
+#             --query "app.appId" --output text)
+#         else
+#           echo "✅ Using existing Amplify App ID: $AMPLIFY_APP_ID"
+#         fi
+
+#       - echo "🔄 Checking or creating Amplify branch"
+#       - |
+#         aws amplify create-branch \
+#           --app-id $AMPLIFY_APP_ID \
+#           --branch-name $AMPLIFY_BRANCH_NAME \
+#           --region $REGION || echo "✅ Branch may already exist"
+
+#       - echo "⏹ Stopping previous deployment job if running"
+#       - |
+#         LAST_JOB_ID=$(aws amplify list-jobs \
+#           --app-id $AMPLIFY_APP_ID \
+#           --branch-name $AMPLIFY_BRANCH_NAME \
+#           --region $REGION \
+#           --query "jobSummaries[?status=='PENDING' || status=='PROVISIONING' || status=='RUNNING'].jobId" \
+#           --output text)
+
+#         if [ -n "$LAST_JOB_ID" ]; then
+#           aws amplify stop-job --app-id $AMPLIFY_APP_ID \
+#             --branch-name $AMPLIFY_BRANCH_NAME \
+#             --job-id $LAST_JOB_ID \
+#             --region $REGION
+#         fi
+
+#       - echo "📤 Creating deployment for Amplify app"
+#       - |
+#         DEPLOYMENT_INFO=$(aws amplify create-deployment \
+#           --app-id $AMPLIFY_APP_ID \
+#           --branch-name $AMPLIFY_BRANCH_NAME \
+#           --region $REGION)
+
+#         DEPLOYMENT_URL=$(echo $DEPLOYMENT_INFO | jq -r '.zipUploadUrl')
+#         JOB_ID=$(echo $DEPLOYMENT_INFO | jq -r '.jobId')
+
+#         echo "📤 Uploading build.zip to Amplify"
+#         curl -T build.zip "$DEPLOYMENT_URL"
+
+#         echo "🚦 Starting Amplify deployment"
+#         aws amplify start-deployment \
+#           --app-id $AMPLIFY_APP_ID \
+#           --branch-name $AMPLIFY_BRANCH_NAME \
+#           --job-id $JOB_ID \
+#           --region $REGION
+
+#       - echo "🔗 Your deployed frontend will be available at:"
+#       - echo "https://$AMPLIFY_BRANCH_NAME.$AMPLIFY_APP_ID.amplifyapp.com"
+
+# artifacts:
+#   base-directory: frontend/build
+#   files:
+#     - "**/*"
+
+# cache:
+#   paths:
+#     - "frontend/node_modules/**/*"
+
 version: 0.2
 
 env:
@@ -544,7 +685,7 @@ phases:
           REACT_APP_LAMBDA_FEEDBACK_FUNCTION=$FEEDBACK_LAMBDA
           REACT_APP_APPLICATION_ID=$APPLICATION_ID
           REACT_APP_DEFAULT_LANGUAGE=EN
-          EOF
+        EOF
       - echo "📦 Installing frontend dependencies"
       - cd frontend && npm install && cd ..
 
@@ -557,11 +698,10 @@ phases:
 
   post_build:
     commands:
-      - echo "🚧 Initializing Amplify app and branch"
-      - AMPLIFY_APP_ID=$(aws amplify list-apps --region $REGION \
-          --query "apps[?name=='DisabilityRightsTexas'].appId" --output text)
-
       - |
+        echo "🚧 Initializing Amplify app and branch"
+        AMPLIFY_APP_ID=$(aws amplify list-apps --region $REGION --query "apps[?name=='DisabilityRightsTexas'].appId" --output text)
+
         if [ -z "$AMPLIFY_APP_ID" ]; then
           echo "📗 Creating new Amplify app"
           AMPLIFY_APP_ID=$(aws amplify create-app \
@@ -572,15 +712,13 @@ phases:
           echo "✅ Using existing Amplify App ID: $AMPLIFY_APP_ID"
         fi
 
-      - echo "🔄 Checking or creating Amplify branch"
-      - |
+        echo "🔄 Checking or creating Amplify branch"
         aws amplify create-branch \
           --app-id $AMPLIFY_APP_ID \
           --branch-name $AMPLIFY_BRANCH_NAME \
           --region $REGION || echo "✅ Branch may already exist"
 
-      - echo "⏹ Stopping previous deployment job if running"
-      - |
+        echo "⏹ Stopping previous deployment job if running"
         LAST_JOB_ID=$(aws amplify list-jobs \
           --app-id $AMPLIFY_APP_ID \
           --branch-name $AMPLIFY_BRANCH_NAME \
@@ -595,8 +733,7 @@ phases:
             --region $REGION
         fi
 
-      - echo "📤 Creating deployment for Amplify app"
-      - |
+        echo "📤 Creating deployment for Amplify app"
         DEPLOYMENT_INFO=$(aws amplify create-deployment \
           --app-id $AMPLIFY_APP_ID \
           --branch-name $AMPLIFY_BRANCH_NAME \
@@ -615,8 +752,8 @@ phases:
           --job-id $JOB_ID \
           --region $REGION
 
-      - echo "🔗 Your deployed frontend will be available at:"
-      - echo "https://$AMPLIFY_BRANCH_NAME.$AMPLIFY_APP_ID.amplifyapp.com"
+        echo "🔗 Your deployed frontend will be available at:"
+        echo "https://$AMPLIFY_BRANCH_NAME.$AMPLIFY_APP_ID.amplifyapp.com"
 
 artifacts:
   base-directory: frontend/build
