@@ -12,18 +12,18 @@ phases:
   pre_build:
     commands:
       - echo Replacing application ID in template.json...
-      - sed -i.bak "s/{applicationId}/$APPLICATION_ID/g" template.json
+      - sed -i.bak 's/{applicationId}/$APPLICATION_ID/g' template.json
       - echo Deploying CloudFormation stack...
       - aws cloudformation deploy --template-file template.json --stack-name disability-rights-texas-stack --parameter-overrides ApplicationId=$APPLICATION_ID --capabilities CAPABILITY_IAM
       - echo Extracting CloudFormation outputs...
-      - API_ENDPOINT=$(aws cloudformation describe-stacks --stack-name disability-rights-texas-stack --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" --output text)
-      - CHAT_ENDPOINT=$(aws cloudformation describe-stacks --stack-name disability-rights-texas-stack --query "Stacks[0].Outputs[?OutputKey=='ChatEndpoint'].OutputValue" --output text)
-      - FEEDBACK_ENDPOINT=$(aws cloudformation describe-stacks --stack-name disability-rights-texas-stack --query "Stacks[0].Outputs[?OutputKey=='FeedbackEndpoint'].OutputValue" --output text)
-      - CHAT_LAMBDA=$(aws cloudformation describe-stacks --stack-name disability-rights-texas-stack --query "Stacks[0].Outputs[?OutputKey=='ChatLambdaFunction'].OutputValue" --output text)
-      - FEEDBACK_LAMBDA=$(aws cloudformation describe-stacks --stack-name disability-rights-texas-stack --query "Stacks[0].Outputs[?OutputKey=='FeedbackLambdaFunction'].OutputValue" --output text)
+      - API_ENDPOINT=$(aws cloudformation describe-stacks --stack-name disability-rights-texas-stack --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' --output text)
+      - CHAT_ENDPOINT=$(aws cloudformation describe-stacks --stack-name disability-rights-texas-stack --query 'Stacks[0].Outputs[?OutputKey==`ChatEndpoint`].OutputValue' --output text)
+      - FEEDBACK_ENDPOINT=$(aws cloudformation describe-stacks --stack-name disability-rights-texas-stack --query 'Stacks[0].Outputs[?OutputKey==`FeedbackEndpoint`].OutputValue' --output text)
+      - CHAT_LAMBDA=$(aws cloudformation describe-stacks --stack-name disability-rights-texas-stack --query 'Stacks[0].Outputs[?OutputKey==`ChatLambdaFunction`].OutputValue' --output text)
+      - FEEDBACK_LAMBDA=$(aws cloudformation describe-stacks --stack-name disability-rights-texas-stack --query 'Stacks[0].Outputs[?OutputKey==`FeedbackLambdaFunction`].OutputValue' --output text)
       - echo Creating .env file with CloudFormation outputs...
       - cd frontend
-      - echo "# API Configuration" > .env
+      - echo '# API Configuration' > .env
       - echo "REACT_APP_BASE_API_ENDPOINT=$API_ENDPOINT" >> .env
       - echo "REACT_APP_API_ENDPOINT=$CHAT_ENDPOINT" >> .env
       - echo "REACT_APP_FEEDBACK_ENDPOINT=$FEEDBACK_ENDPOINT" >> .env
@@ -31,9 +31,9 @@ phases:
       - echo "REACT_APP_LAMBDA_FUNCTION=$CHAT_LAMBDA" >> .env
       - echo "REACT_APP_LAMBDA_FEEDBACK_FUNCTION=$FEEDBACK_LAMBDA" >> .env
       - echo "REACT_APP_APPLICATION_ID=$APPLICATION_ID" >> .env
-      - echo "" >> .env
-      - echo "# Language Configuration" >> .env
-      - echo "REACT_APP_DEFAULT_LANGUAGE=EN" >> .env
+      - echo '' >> .env
+      - echo '# Language Configuration' >> .env
+      - echo 'REACT_APP_DEFAULT_LANGUAGE=EN' >> .env
       - echo Installing frontend dependencies...
       - npm install
   
@@ -44,14 +44,23 @@ phases:
       - echo Setting up Amplify deployment...
       - amplify init -y
       - echo Deploying to Amplify...
-      - if [ -z "$AMPLIFY_APP_ID" ]; then echo "Creating new Amplify app..."; AMPLIFY_APP_ID=$(aws amplify create-app --name "DisabilityRightsTexas" --query "app.appId" --output text); aws amplify create-branch --app-id $AMPLIFY_APP_ID --branch-name main; echo "Created Amplify app with ID: $AMPLIFY_APP_ID"; else echo "Using existing Amplify app ID: $AMPLIFY_APP_ID"; fi
+      - |
+        if [ -z "$AMPLIFY_APP_ID" ]
+        then
+          echo 'Creating new Amplify app...'
+          AMPLIFY_APP_ID=$(aws amplify create-app --name 'DisabilityRightsTexas' --query 'app.appId' --output text)
+          aws amplify create-branch --app-id $AMPLIFY_APP_ID --branch-name main
+          echo "Created Amplify app with ID: $AMPLIFY_APP_ID"
+        else
+          echo "Using existing Amplify app ID: $AMPLIFY_APP_ID"
+        fi
       - SOURCE_URL=$(zip -r ../build.zip build/ && aws s3 cp ../build.zip s3://$ARTIFACT_BUCKET/build.zip && aws s3 presign s3://$ARTIFACT_BUCKET/build.zip --expires-in 3600)
       - aws amplify start-job --app-id $AMPLIFY_APP_ID --branch-name main --job-type RELEASE --source-url $SOURCE_URL
   
   post_build:
     commands:
       - echo Deployment completed on $(date)
-      - echo Frontend URL: https://main.$AMPLIFY_APP_ID.amplifyapp.com
+      - echo "Frontend URL: https://main.$AMPLIFY_APP_ID.amplifyapp.com"
 
 artifacts:
   base-directory: frontend/build
