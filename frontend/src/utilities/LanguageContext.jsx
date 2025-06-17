@@ -31,7 +31,7 @@ export const LanguageProvider = ({ children }) => {
   // Set initial language cookie only if not present
   useEffect(() => {
     if (!cookies.language) {
-      const defaultLanguage = CONFIG.translation.defaultLanguage;
+      const defaultLanguage = CONFIG.translation.defaultLanguage || 'EN';
       console.log(`Setting initial language to ${defaultLanguage}`);
       setCookie('language', defaultLanguage, { path: '/' });
       setCurrentLanguage(defaultLanguage);

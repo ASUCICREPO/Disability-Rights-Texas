@@ -23,12 +23,15 @@ const CONFIG = {
     },
     emptyStateMessage: {
       EN: "Start a conversation with Amazon Q Business",
-      ES: "Inicia una conversación con Amazon Q Business"
+      ES: "Inicia una conversación with Amazon Q Business"
     },
     translationIndicator: {
       EN: "Automatic translation",
       ES: "Traducción automática"
     }
+  },
+  translation: {
+    defaultLanguage: process.env.REACT_APP_DEFAULT_LANGUAGE || 'EN'
   },
   supportedLanguages: ['EN', 'ES'],
   defaultLanguage: process.env.REACT_APP_DEFAULT_LANGUAGE || 'EN',
