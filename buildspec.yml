@@ -56,9 +56,8 @@ phases:
         else
           echo "Using existing Amplify app ID: $AMPLIFY_APP_ID"
         fi
-      - |
-        SOURCE_URL=$(zip -r ../build.zip build/ && aws s3 cp ../build.zip s3://$ARTIFACT_BUCKET/build.zip && aws s3 presign s3://$ARTIFACT_BUCKET/build.zip --expires-in 3600)
-        aws amplify start-job --app-id $AMPLIFY_APP_ID --branch-name main --job-type RELEASE --source-url $SOURCE_URL
+      - SOURCE_URL=$(zip -r ../build.zip build/ && aws s3 cp ../build.zip s3://$ARTIFACT_BUCKET/build.zip && aws s3 presign s3://$ARTIFACT_BUCKET/build.zip --expires-in 3600)
+      - aws amplify start-job --app-id $AMPLIFY_APP_ID --branch-name main --job-type RELEASE --source-url $SOURCE_URL
   
   post_build:
     commands:
