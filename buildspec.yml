@@ -582,10 +582,7 @@ phases:
         echo "Uploading build.zip to Amplify";
         curl -T build.zip "$DEPLOYMENT_URL"
       - echo "🚦 Starting Amplify deployment"
-      - aws amplify start-deployment \
-          --app-id $AMPLIFY_APP_ID \
-          --branch-name $AMPLIFY_BRANCH_NAME \
-          --region $REGION
+      - aws amplify start-deployment --app-id $AMPLIFY_APP_ID --branch-name $AMPLIFY_BRANCH_NAME --region $REGION
       - echo "🔗 Your deployed frontend will be available at:"
       - echo "https://$AMPLIFY_BRANCH_NAME.$AMPLIFY_APP_ID.amplifyapp.com"
 
