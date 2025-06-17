@@ -574,15 +574,23 @@ phases:
       - aws amplify create-branch --app-id $AMPLIFY_APP_ID --branch-name $AMPLIFY_BRANCH_NAME --region $REGION || echo "✅ Branch may already exist"
       - echo "📤 Creating deployment for Amplify app"
       - >
-        DEPLOYMENT_URL=$(aws amplify create-deployment \
+        DEPLOYMENT_INFO=$(aws amplify create-deployment \
           --app-id $AMPLIFY_APP_ID \
           --branch-name $AMPLIFY_BRANCH_NAME \
-          --region $REGION \
-          --query "zipUploadUrl" --output text);
-        echo "Uploading build.zip to Amplify";
+          --region $REGION)
+
+        DEPLOYMENT_URL=$(echo $DEPLOYMENT_INFO | jq -r '.zipUploadUrl')
+        JOB_ID=$(echo $DEPLOYMENT_INFO | jq -r '.jobId')
+
+        echo "📤 Uploading build.zip to Amplify"
         curl -T build.zip "$DEPLOYMENT_URL"
-      - echo "🚦 Starting Amplify deployment"
-      - aws amplify start-deployment --app-id $AMPLIFY_APP_ID --branch-name $AMPLIFY_BRANCH_NAME --region $REGION
+
+        echo "🚦 Starting Amplify deployment"
+        aws amplify start-deployment \
+          --app-id $AMPLIFY_APP_ID \
+          --branch-name $AMPLIFY_BRANCH_NAME \
+          --job-id $JOB_ID \
+          --region $REGION
       - echo "🔗 Your deployed frontend will be available at:"
       - echo "https://$AMPLIFY_BRANCH_NAME.$AMPLIFY_APP_ID.amplifyapp.com"
 
