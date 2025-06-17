@@ -352,18 +352,14 @@ phases:
       - |
         if [ -z "$AMPLIFY_APP_ID" ]; then
           echo "Creating new Amplify app"
-          AMPLIFY_APP_ID=$(aws amplify create-app \
+          export AMPLIFY_APP_ID=$(aws amplify create-app \
             --name "DisabilityRightsFrontend" \
             --region $REGION \
             --query "app.appId" \
             --output text)
 
-          if [ -z "$AMPLIFY_APP_ID" ]; then
-            echo "❌ Failed to create Amplify app"
-            exit 1
-          fi
+          echo "Amplify App ID: $AMPLIFY_APP_ID"
 
-          echo "Creating branch $AMPLIFY_BRANCH_NAME"
           aws amplify create-branch \
             --app-id $AMPLIFY_APP_ID \
             --branch-name $AMPLIFY_BRANCH_NAME
@@ -372,10 +368,18 @@ phases:
         fi
 
       - echo "Triggering Amplify deployment"
-      - aws amplify start-job \
-          --app-id $AMPLIFY_APP_ID \
-          --branch-name $AMPLIFY_BRANCH_NAME \
-          --job-type RELEASE
+      - |
+        if [ -n "$AMPLIFY_APP_ID" ]; then
+          aws amplify start-job \
+            --app-id $AMPLIFY_APP_ID \
+            --branch-name $AMPLIFY_BRANCH_NAME \
+            --job-type RELEASE
+            echo "🔗 Your deployed frontend will be available at:"
+            echo "https://$AMPLIFY_BRANCH_NAME.$AMPLIFY_APP_ID.amplifyapp.com"
+        else
+          echo "❌ AMPLIFY_APP_ID not set, skipping deployment"
+          exit 1
+        fi
 
       - echo "🔗 Your deployed frontend will be available at:"
       - echo "https://$AMPLIFY_BRANCH_NAME.$AMPLIFY_APP_ID.amplifyapp.com"
