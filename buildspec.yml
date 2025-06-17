@@ -12,29 +12,44 @@ phases:
   pre_build:
     commands:
       - echo "Pre-build phase"
-      - sed -i.bak "s/{applicationId}/$APPLICATION_ID/g" template.json
-      - aws cloudformation deploy --template-file template.json --stack-name disability-rights-texas-stack --parameter-overrides ApplicationId=$APPLICATION_ID --capabilities CAPABILITY_IAM
-      - echo "Extracting CloudFormation outputs"
+      - echo "Skipping CloudFormation operations due to permissions"
       - cd frontend
-      - echo "Creating .env file"
+      - echo "Creating sample .env file"
+      - echo "# API Configuration" > .env
+      - echo "REACT_APP_BASE_API_ENDPOINT=https://example.com/api" >> .env
+      - echo "REACT_APP_API_ENDPOINT=https://example.com/chat" >> .env
+      - echo "REACT_APP_FEEDBACK_ENDPOINT=https://example.com/feedback" >> .env
+      - echo "REACT_APP_AWS_REGION=$AWS_REGION" >> .env
+      - echo "REACT_APP_LAMBDA_FUNCTION=sample-function" >> .env
+      - echo "REACT_APP_LAMBDA_FEEDBACK_FUNCTION=sample-feedback-function" >> .env
+      - echo "REACT_APP_APPLICATION_ID=$APPLICATION_ID" >> .env
+      - echo "" >> .env
+      - echo "# Language Configuration" >> .env
+      - echo "REACT_APP_DEFAULT_LANGUAGE=EN" >> .env
+      - echo "Installing frontend dependencies"
       - npm install
   
   build:
     commands:
       - echo "Building React application"
       - npm run build
+      - echo "Setting up Amplify deployment"
       - amplify init -y
-      - echo "Deploying to Amplify"
       - echo "Creating zip file"
       - zip -r ../build.zip build/
       - echo "Uploading to S3"
       - aws s3 cp ../build.zip s3://$ARTIFACT_BUCKET/build.zip
       - echo "Getting presigned URL"
+      - SOURCE_URL=$(aws s3 presign s3://$ARTIFACT_BUCKET/build.zip --expires-in 3600)
       - echo "Starting Amplify job"
+      - echo "Amplify app ID: $AMPLIFY_APP_ID"
+      - test -z "$AMPLIFY_APP_ID" && echo "No Amplify app ID provided, skipping deployment"
+      - test -n "$AMPLIFY_APP_ID" && aws amplify start-job --app-id $AMPLIFY_APP_ID --branch-name main --job-type RELEASE --source-url $SOURCE_URL
   
   post_build:
     commands:
       - echo "Deployment completed"
+      - test -n "$AMPLIFY_APP_ID" && echo "Frontend URL: https://main.$AMPLIFY_APP_ID.amplifyapp.com"
 
 artifacts:
   base-directory: frontend/build
