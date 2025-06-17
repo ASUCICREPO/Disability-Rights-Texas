@@ -58,7 +58,7 @@ function AmazonQChat() {
     
     try {
       // Modify input text for Spanish language
-      const modifiedInput = currentLanguage === 'ES' ? `${inputText} in spanish` : inputText;
+      const modifiedInput = currentLanguage === 'EN' ?  inputText : `${inputText} in spanish`;
       console.log("Current Language", currentLanguage);
       console.log("Modified Input ",modifiedInput);
       

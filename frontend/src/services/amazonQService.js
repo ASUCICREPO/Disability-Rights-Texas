@@ -123,12 +123,21 @@ class AmazonQService {
    */
   static async sendFeedback(feedback, messageId, conversationId) {
     try {
-      // Use the application ID from CONFIG or fall back to a default value
-      const applicationId = CONFIG.api.applicationId || 'default-app-id';
+      // Use the application ID from CONFIG
+      const applicationId = CONFIG.api.applicationId;
       console.log("Using application ID:", applicationId);
+      console.log("Application ID type:", typeof applicationId);
+      console.log("Application ID length:", applicationId ? applicationId.length : 0);
+      console.log("Application ID value:", applicationId);
+      console.log("Feedback endpoint template:", CONFIG.api.feedbackEndpoint);
       
-      if (!applicationId || applicationId === 'undefined') {
-        throw new Error('Empty value provided for input HTTP label: applicationId');
+      if (!isValidAppId) {
+        console.warn("Invalid application ID format. Feedback functionality is disabled.");
+        return { 
+          success: false, 
+          error: 'Feedback is disabled: Application ID is missing or invalid',
+          feedbackDisabled: true 
+        };
       }
       
       if (!messageId || !conversationId) {
