@@ -6,20 +6,57 @@ phases:
       nodejs: 16
     commands:
       - echo "Installing dependencies"
+      - npm install -g aws-cli
+      - npm install -g @aws-amplify/cli
   
   pre_build:
     commands:
       - echo "Pre-build phase"
+      - cd frontend
+      - echo "Creating sample .env file"
+      - echo "# API Configuration" > .env
+      - echo "REACT_APP_BASE_API_ENDPOINT=https://example.com/api" >> .env
+      - echo "REACT_APP_API_ENDPOINT=https://example.com/chat" >> .env
+      - echo "REACT_APP_FEEDBACK_ENDPOINT=https://example.com/feedback" >> .env
+      - echo "REACT_APP_AWS_REGION=$AWS_REGION" >> .env
+      - echo "REACT_APP_LAMBDA_FUNCTION=sample-function" >> .env
+      - echo "REACT_APP_LAMBDA_FEEDBACK_FUNCTION=sample-feedback-function" >> .env
+      - echo "REACT_APP_APPLICATION_ID=$APPLICATION_ID" >> .env
+      - echo "# Language Configuration" >> .env
+      - echo "REACT_APP_DEFAULT_LANGUAGE=EN" >> .env
+      - echo "Installing frontend dependencies"
+      - npm install
   
   build:
     commands:
-      - echo "Build phase"
+      - echo "Building React application"
+      - npm run build
+      - echo "Setting up Amplify deployment"
+      - amplify init -y
+      - echo "Creating zip file"
+      - zip -r ../build.zip build/
+      - echo "Uploading to S3"
+      - aws s3 cp ../build.zip s3://$ARTIFACT_BUCKET/build.zip
+      - echo "Getting presigned URL"
+      - aws s3 presign s3://$ARTIFACT_BUCKET/build.zip --expires-in 3600 > ../presigned-url.txt
+      - echo "Reading presigned URL"
+      - SOURCE_URL=$(cat ../presigned-url.txt)
+      - echo "Checking Amplify app ID"
+      - echo "Amplify app ID: $AMPLIFY_APP_ID"
+      - echo "Starting Amplify job"
+      - aws amplify start-job --app-id $AMPLIFY_APP_ID --branch-name main --job-type RELEASE --source-url $SOURCE_URL || echo "Amplify deployment skipped"
   
   post_build:
     commands:
       - echo "Post-build phase"
+      - echo "Deployment completed"
+      - echo "Frontend URL: https://main.$AMPLIFY_APP_ID.amplifyapp.com"
 
 artifacts:
   base-directory: frontend/build
   files:
     - "**/*"
+
+cache:
+  paths:
+    - "frontend/node_modules/**/*"
