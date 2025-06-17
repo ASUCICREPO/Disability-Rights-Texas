@@ -1,5 +1,12 @@
 version: 0.2
 
+env:
+  variables:
+    AMPLIFY_USERPOOLID: "auto"
+    AMPLIFY_WEBAPPID: "auto"
+    AMPLIFY_NATIVECLIENTID: "auto"
+    AMPLIFY_IDENTITYPOOLID: "auto"
+
 phases:
   install:
     runtime-versions:
@@ -7,26 +14,67 @@ phases:
     commands:
       - echo "Installing dependencies"
       - npm install -g aws-cli
+      - npm install -g @aws-amplify/cli
   
   pre_build:
     commands:
       - echo "Pre-build phase"
+      - sed -i.bak "s/{applicationId}/$APPLICATION_ID/g" template.json || echo "Template replacement skipped"
+      - echo "Creating environment file"
       - cd frontend
-      - echo "# API Configuration" > .env
-      - echo "REACT_APP_BASE_API_ENDPOINT=https://example.com/api" >> .env
-      - echo "REACT_APP_DEFAULT_LANGUAGE=EN" >> .env
+      - |
+        cat > .env << EOF
+        # API Configuration
+        REACT_APP_BASE_API_ENDPOINT=$API_ENDPOINT
+        REACT_APP_API_ENDPOINT=$CHAT_ENDPOINT
+        REACT_APP_FEEDBACK_ENDPOINT=$FEEDBACK_ENDPOINT
+        REACT_APP_AWS_REGION=$AWS_REGION
+        REACT_APP_LAMBDA_FUNCTION=$CHAT_LAMBDA
+        REACT_APP_LAMBDA_FEEDBACK_FUNCTION=$FEEDBACK_LAMBDA
+        REACT_APP_APPLICATION_ID=$APPLICATION_ID
+        
+        # Language Configuration
+        REACT_APP_DEFAULT_LANGUAGE=EN
+        EOF
+      - echo "Installing frontend dependencies"
       - npm install
   
   build:
     commands:
       - echo "Building React application"
       - npm run build
-      - echo "Skipping Amplify initialization due to credential issues"
+      - echo "Preparing for deployment"
+      - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+      - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+      - aws configure set region $AWS_REGION
+      - echo "Configuring Amplify"
+      - amplify configure --usage-data-off
+      - echo "Creating deployment package"
+      - cd build
+      - zip -r ../../build.zip .
+      - cd ../..
+      - echo "Uploading to S3"
+      - aws s3 cp build.zip s3://$ARTIFACT_BUCKET/build.zip
+      - echo "Creating deployment URL"
+      - aws s3 presign s3://$ARTIFACT_BUCKET/build.zip --expires-in 3600 > presigned-url.txt
+      - export SOURCE_URL=$(cat presigned-url.txt)
+      - echo "Deploying to Amplify"
+      - |
+        if [ -n "$AMPLIFY_APP_ID" ]; then
+          echo "Using existing Amplify app ID: $AMPLIFY_APP_ID"
+          aws amplify start-job --app-id $AMPLIFY_APP_ID --branch-name main --job-type RELEASE --source-url $SOURCE_URL
+        else
+          echo "No Amplify app ID provided, creating new app"
+          export AMPLIFY_APP_ID=$(aws amplify create-app --name "DisabilityRightsTexas" --query "app.appId" --output text)
+          aws amplify create-branch --app-id $AMPLIFY_APP_ID --branch-name main
+          aws amplify start-job --app-id $AMPLIFY_APP_ID --branch-name main --job-type RELEASE --source-url $SOURCE_URL
+          echo "Created Amplify app with ID: $AMPLIFY_APP_ID"
+        fi
   
   post_build:
     commands:
-      - echo "Build completed successfully"
-      - echo "Artifacts will be available in the build directory"
+      - echo "Deployment completed"
+      - echo "Frontend URL: https://main.$AMPLIFY_APP_ID.amplifyapp.com"
 
 artifacts:
   base-directory: frontend/build
