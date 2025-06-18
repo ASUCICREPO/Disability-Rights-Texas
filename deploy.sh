@@ -445,8 +445,9 @@ if [ -z "${GITHUB_URL:-}" ]; then
   fi
 fi
 
-# Define SOURCE configuration for GitHub - using NO_SOURCE to avoid connection issues
-SOURCE="{\"type\":\"NO_SOURCE\"}"
+# Define SOURCE configuration - using NO_SOURCE with inline buildspec
+BUILDSPEC_CONTENT=$(cat buildspec.yml)
+SOURCE="{\"type\":\"NO_SOURCE\",\"buildspec\":\"$BUILDSPEC_CONTENT\"}"
 
 # Create or update CodeBuild project
 if aws codebuild batch-get-projects --names "$CODEBUILD_PROJECT_NAME" --query 'projects[0].name' --output text 2>/dev/null | grep -q "$CODEBUILD_PROJECT_NAME"; then
@@ -481,8 +482,6 @@ fi
 echo "Starting deployment build..."
 BUILD_ID=$(aws codebuild start-build \
   --project-name "$CODEBUILD_PROJECT_NAME" \
-  --source-type-override NO_SOURCE \
-  --buildspec-override "$(cat buildspec.yml)" \
   --query 'build.id' \
   --output text)
 
