@@ -134,7 +134,7 @@ class AmazonQService {
   static async sendFeedback(feedback, messageId, conversationId) {
     try {
       // Use the applicationId from the window object (set in index.js)
-      const applicationId = window.APPLICATION_ID;
+      const applicationId = CONFIG.api.applicationId;
       console.log("Using application ID from window object:", applicationId);
       console.log("Application ID type:", typeof applicationId);
       console.log("Application ID length:", applicationId ? applicationId.length : 0);
