@@ -149,17 +149,16 @@ POLICY_DOC=$(cat <<EOF
       "Resource": "*"
     },
     {
-      "Sid": "S3BucketAccess",
+      "Sid": "S3ArtifactsAccess",
       "Effect": "Allow",
       "Action": [
-        "s3:CreateBucket",
         "s3:PutObject",
         "s3:GetObject",
         "s3:ListBucket"
       ],
       "Resource": [
-        "arn:aws:s3:::${PROJECT_NAME}-source-bucket",
-        "arn:aws:s3:::${PROJECT_NAME}-source-bucket/*"
+        "arn:aws:s3:::codebuild-*",
+        "arn:aws:s3:::amplify-*"
       ]
     },
     {
@@ -209,10 +208,10 @@ else
     --policy-name "$POLICY_NAME" \
     --policy-document "$POLICY_DOC"
 
-  # Also attach the basic execution policy for CodeBuild
+  # Attach the basic execution policy for CodeBuild
   aws iam attach-role-policy \
     --role-name "$ROLE_NAME" \
-    --policy-arn arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+    --policy-arn arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
 
   echo "Waiting for IAM role to propagate..."
   sleep 10
