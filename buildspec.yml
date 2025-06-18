@@ -28,7 +28,7 @@ phases:
             --template-file template.json \
             --stack-name $STACK_NAME \
             --capabilities CAPABILITY_NAMED_IAM \
-            --region $REGION
+            --region $REGION \
             --parameter-overrides ApplicationId=$APPLICATION_ID
         fi
       - echo "📦 Fetching CloudFormation outputs"
