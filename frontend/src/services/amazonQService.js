@@ -131,15 +131,6 @@ class AmazonQService {
       console.log("Application ID value:", applicationId);
       console.log("Feedback endpoint template:", CONFIG.api.feedbackEndpoint);
       
-      if (!isValidAppId) {
-        console.warn("Invalid application ID format. Feedback functionality is disabled.");
-        return { 
-          success: false, 
-          error: 'Feedback is disabled: Application ID is missing or invalid',
-          feedbackDisabled: true 
-        };
-      }
-      
       if (!messageId || !conversationId) {
         console.error('Missing required IDs for feedback');
         return { success: false, error: 'Missing message or conversation ID' };
