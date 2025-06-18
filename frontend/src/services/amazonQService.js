@@ -139,7 +139,7 @@ class AmazonQService {
       // Construct the feedback endpoint URL with the required parameters
       // Use string literals with explicit string replacement to avoid issues with curly braces
       let feedbackEndpoint = CONFIG.api.feedbackEndpoint;
-      feedbackEndpoint = feedbackEndpoint.split("{applicationId}")
+      feedbackEndpoint = feedbackEndpoint.split("{applicationId}").join(applicationId);
       feedbackEndpoint = feedbackEndpoint.split("{conversationId}").join(conversationId);
       feedbackEndpoint = feedbackEndpoint.split("{messageId}").join(messageId);
       
