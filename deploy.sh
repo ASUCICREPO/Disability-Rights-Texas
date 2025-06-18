@@ -434,42 +434,26 @@ EOF
 )
 
 ARTIFACTS='{"type":"NO_ARTIFACTS"}'
-SOURCE=$(cat <<EOF
-{
-  "type":"S3",
-  "location":"${PROJECT_NAME}-source-bucket/buildspec.yml"
-}
-EOF
-)
 
-# Create S3 bucket for source code
-BUCKET_NAME="${PROJECT_NAME}-source-bucket"
-echo "Creating S3 bucket for source code: $BUCKET_NAME"
-
-if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
-  aws s3 mb "s3://$BUCKET_NAME" --region "$AWS_REGION"
-  echo "✓ S3 bucket created"
-else
-  echo "✓ S3 bucket already exists"
+# Get the GitHub repository URL
+if [ -z "${GITHUB_URL:-}" ]; then
+  # Try to get the GitHub URL from git config
+  GITHUB_URL=$(git config --get remote.origin.url 2>/dev/null || echo "")
+  if [ -z "$GITHUB_URL" ]; then
+    read -rp "Enter GitHub repository URL: " GITHUB_URL
+  else
+    echo "Detected GitHub URL: $GITHUB_URL"
+  fi
 fi
 
-# Package and upload source code to S3
-echo "Packaging source code..."
-zip -r source.zip . -x "*.git*" "node_modules/*" "frontend/node_modules/*" "frontend/build/*" "*.zip"
-
-echo "Uploading source code to S3..."
-aws s3 cp source.zip "s3://$BUCKET_NAME/source.zip"
-aws s3 cp buildspec.yml "s3://$BUCKET_NAME/buildspec.yml"
-
-# Update SOURCE to use the uploaded zip file
-SOURCE=$(cat <<EOF
-{
-  "type":"S3",
-  "location":"${BUCKET_NAME}/source.zip",
-  "buildspec":"buildspec.yml"
-}
-EOF
-)
+# Define SOURCE configuration for GitHub
+if [[ "$GITHUB_URL" == *"https://"* ]]; then
+  # For public repositories or HTTPS URLs
+  SOURCE="{\"type\":\"GITHUB\",\"location\":\"$GITHUB_URL\",\"reportBuildStatus\":true}"
+else
+  # For SSH URLs
+  SOURCE="{\"type\":\"GITHUB\",\"location\":\"$GITHUB_URL\",\"reportBuildStatus\":true,\"auth\":{\"type\":\"OAUTH\"}}"
+fi
 
 # Create or update CodeBuild project
 if aws codebuild batch-get-projects --names "$CODEBUILD_PROJECT_NAME" --query 'projects[0].name' --output text 2>/dev/null | grep -q "$CODEBUILD_PROJECT_NAME"; then
@@ -504,6 +488,7 @@ fi
 echo "Starting deployment build..."
 BUILD_ID=$(aws codebuild start-build \
   --project-name "$CODEBUILD_PROJECT_NAME" \
+  --buildspec-override "buildspec.yml" \
   --query 'build.id' \
   --output text)
 
