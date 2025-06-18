@@ -71,10 +71,8 @@ const BotResponse = ({ message, citations = [], messageId = "", conversationId =
     });
     
     try {
-      // Pass the hardcoded applicationId directly to the sendFeedback method
-      const applicationId = CONFIG.api.applicationId;
-      console.log('Using application ID in botresponse test:', applicationId);
-      const result = await AmazonQService.sendFeedback(updatedFeedback, messageId, conversationId, applicationId);
+      // Let the service handle the applicationId
+      const result = await AmazonQService.sendFeedback(updatedFeedback, messageId, conversationId);
       
       if (result.success) {
         setFeedback(updatedFeedback);

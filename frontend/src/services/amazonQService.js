@@ -7,6 +7,16 @@ class AmazonQService {
   // Static properties to store the latest message and conversation IDs
   static lastSystemMessageId = '';
   static lastConversationId = '';
+  static applicationId = '';
+  
+  // Log environment variables on initialization
+  static {
+    console.log("Environment variables check in AmazonQService:", {
+      API_ENDPOINT: process.env.REACT_APP_API_ENDPOINT,
+      APPLICATION_ID: process.env.REACT_APP_APPLICATION_ID,
+      CONFIG_APPLICATION_ID: CONFIG.api.applicationId
+    });
+  }
   /**
    * Send a message to Amazon Q Business API
    * @param {string} message - The user's message
@@ -119,14 +129,13 @@ class AmazonQService {
    * @param {string} feedback - The feedback type ('UPVOTED' or 'DOWNVOTED')
    * @param {string} messageId - The ID of the message being rated
    * @param {string} conversationId - The ID of the conversation
-   * @param {string} [applicationId] - Optional application ID, will use CONFIG.api.applicationId if not provided
    * @returns {Promise} - Promise resolving to the API response
    */
-  static async sendFeedback(feedback, messageId, conversationId, applicationId) {
+  static async sendFeedback(feedback, messageId, conversationId) {
     try {
-      // Use provided applicationId or fall back to CONFIG
-      applicationId = applicationId || CONFIG.api.applicationId;
-      console.log("Using application ID:", applicationId);
+      // Use the applicationId from the window object (set in index.js)
+      const applicationId = window.APPLICATION_ID;
+      console.log("Using application ID from window object:", applicationId);
       console.log("Application ID type:", typeof applicationId);
       console.log("Application ID length:", applicationId ? applicationId.length : 0);
       console.log("Feedback endpoint template:", CONFIG.api.feedbackEndpoint);

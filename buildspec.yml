@@ -54,9 +54,11 @@ phases:
         REACT_APP_AWS_REGION=$REGION
         REACT_APP_LAMBDA_FUNCTION=$CHAT_LAMBDA
         REACT_APP_LAMBDA_FEEDBACK_FUNCTION=$FEEDBACK_LAMBDA
-        REACT_APP_APPLICATION_ID=$APPLICATION_ID
+        REACT_APP_APPLICATION_ID=${APPLICATION_ID:-$CODEBUILD_SRC_DIR_APPLICATION_ID}
         REACT_APP_DEFAULT_LANGUAGE=EN
         EOF
+      - echo "🔍 Generated .env file:"
+      - cat frontend/.env
       - echo "📦 Installing frontend dependencies"
       - cd frontend && npm install && cd ..
 
