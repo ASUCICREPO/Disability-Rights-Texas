@@ -445,9 +445,8 @@ if [ -z "${GITHUB_URL:-}" ]; then
   fi
 fi
 
-# Define SOURCE configuration - using NO_SOURCE with inline buildspec
-BUILDSPEC_CONTENT=$(cat buildspec.yml)
-SOURCE="{\"type\":\"NO_SOURCE\",\"buildspec\":\"$BUILDSPEC_CONTENT\"}"
+# Define SOURCE configuration - using GITHUB source type
+SOURCE="{\"type\":\"GITHUB\",\"location\":\"$GITHUB_URL\"}"
 
 # Create or update CodeBuild project
 if aws codebuild batch-get-projects --names "$CODEBUILD_PROJECT_NAME" --query 'projects[0].name' --output text 2>/dev/null | grep -q "$CODEBUILD_PROJECT_NAME"; then
