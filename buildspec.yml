@@ -43,7 +43,6 @@ phases:
         FEEDBACK_ENDPOINT=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="FeedbackEndpoint") | .OutputValue')
         CHAT_LAMBDA=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="ChatLambdaFunction") | .OutputValue')
         FEEDBACK_LAMBDA=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="FeedbackLambdaFunction") | .OutputValue')
-        APPLICATION_ID=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="ApplicationId") | .OutputValue')
 
         echo "🌍 Generating .env file"
         mkdir -p frontend
@@ -54,7 +53,7 @@ phases:
         REACT_APP_AWS_REGION=$REGION
         REACT_APP_LAMBDA_FUNCTION=$CHAT_LAMBDA
         REACT_APP_LAMBDA_FEEDBACK_FUNCTION=$FEEDBACK_LAMBDA
-        REACT_APP_APPLICATION_ID=${APPLICATION_ID:-$CODEBUILD_SRC_DIR_APPLICATION_ID}
+        REACT_APP_APPLICATION_ID=$APPLICATION_ID
         REACT_APP_DEFAULT_LANGUAGE=EN
         EOF
       - echo "🔍 Generated .env file:"
