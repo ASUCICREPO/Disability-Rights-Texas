@@ -78,6 +78,14 @@ POLICY_DOC=$(cat <<EOF
       "Resource": "*"
     },
     {
+      "Effect": "Allow",
+      "Action": [
+        "codestar-connections:GetConnection",
+        "codestar-connections:UseConnection"
+      ],
+      "Resource": "arn:aws:codestar-connections:${AWS_REGION}:${AWS_ACCOUNT_ID}:connection/c9c7aeca-7013-4b2c-a73d-636515da4bf4"
+    },
+    {
       "Sid": "APIGatewayCRUD",
       "Effect": "Allow",
       "Action": [
