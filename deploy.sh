@@ -78,14 +78,6 @@ POLICY_DOC=$(cat <<EOF
       "Resource": "*"
     },
     {
-      "Effect": "Allow",
-      "Action": [
-        "codestar-connections:GetConnection",
-        "codestar-connections:UseConnection"
-      ],
-      "Resource": "arn:aws:codestar-connections:${AWS_REGION}:${AWS_ACCOUNT_ID}:connection/c9c7aeca-7013-4b2c-a73d-636515da4bf4"
-    },
-    {
       "Sid": "APIGatewayCRUD",
       "Effect": "Allow",
       "Action": [
@@ -453,8 +445,20 @@ if [ -z "${GITHUB_URL:-}" ]; then
   fi
 fi
 
-# Define SOURCE configuration - using GITHUB source type
-SOURCE="{\"type\":\"GITHUB\",\"location\":\"$GITHUB_URL\"}"
+# Define SOURCE configuration - using public GitHub directly
+SOURCE=$(cat <<EOF
+{
+  "type": "GITHUB",
+  "location": "$GITHUB_URL",
+  "buildspec": "buildspec.yml",
+  "gitCloneDepth": 1,
+  "gitSubmodulesConfig": {
+    "fetchSubmodules": false
+  },
+  "insecureSsl": false
+}
+EOF
+)
 
 # Create or update CodeBuild project
 if aws codebuild batch-get-projects --names "$CODEBUILD_PROJECT_NAME" --query 'projects[0].name' --output text 2>/dev/null | grep -q "$CODEBUILD_PROJECT_NAME"; then
