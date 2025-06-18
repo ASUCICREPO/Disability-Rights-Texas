@@ -125,7 +125,7 @@ class AmazonQService {
     try {
       // Use the application ID from CONFIG
       const applicationId = process.env.REACT_APP_APPLICATION_ID;
-      console.log("Using application ID:", applicationId);
+      console.log("Using env application ID:", applicationId);
       console.log("Application ID type:", typeof applicationId);
       console.log("Application ID length:", applicationId ? applicationId.length : 0);
       console.log("Application ID value:", applicationId);
