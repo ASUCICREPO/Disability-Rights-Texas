@@ -437,8 +437,7 @@ ARTIFACTS='{"type":"NO_ARTIFACTS"}'
 SOURCE=$(cat <<EOF
 {
   "type":"S3",
-  "location":"${PROJECT_NAME}-source-bucket",
-  "buildspec":"buildspec.yml"
+  "location":"${PROJECT_NAME}-source-bucket/buildspec.yml"
 }
 EOF
 )
@@ -466,8 +465,8 @@ aws s3 cp buildspec.yml "s3://$BUCKET_NAME/buildspec.yml"
 SOURCE=$(cat <<EOF
 {
   "type":"S3",
-  "location":"${BUCKET_NAME}",
-  "path":"/"
+  "location":"${BUCKET_NAME}/source.zip",
+  "buildspec":"buildspec.yml"
 }
 EOF
 )
