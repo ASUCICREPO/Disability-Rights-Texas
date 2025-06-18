@@ -1,13 +1,14 @@
 // Configuration for API endpoints
 const CONFIG = {
   api: {
-    baseEndpoint: process.env.REACT_APP_BASE_API_ENDPOINT,
-    endpoint: process.env.REACT_APP_API_ENDPOINT,
-    feedbackEndpoint: process.env.REACT_APP_FEEDBACK_ENDPOINT,
-    region: process.env.REACT_APP_AWS_REGION,
-    lambdaFunction: process.env.REACT_APP_LAMBDA_FUNCTION,
-    applicationId: process.env.REACT_APP_APPLICATION_ID
-  },
+    baseEndpoint: process.env.REACT_APP_BASE_API_ENDPOINT ? process.env.REACT_APP_BASE_API_ENDPOINT.trim() : undefined,
+    endpoint: process.env.REACT_APP_API_ENDPOINT ? process.env.REACT_APP_API_ENDPOINT.trim() : undefined,
+    feedbackEndpoint: process.env.REACT_APP_FEEDBACK_ENDPOINT ? process.env.REACT_APP_FEEDBACK_ENDPOINT.trim() : undefined,
+    region: process.env.REACT_APP_AWS_REGION ? process.env.REACT_APP_AWS_REGION.trim() : undefined,
+    lambdaFunction: process.env.REACT_APP_LAMBDA_FUNCTION ? process.env.REACT_APP_LAMBDA_FUNCTION.trim() : undefined,
+    applicationId: process.env.REACT_APP_APPLICATION_ID ? process.env.REACT_APP_APPLICATION_ID.trim() : undefined
+  },        
+
   ui: {
     noAnswerMessage: {
       EN: "I don't have enough information to answer that question.",
