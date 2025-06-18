@@ -445,14 +445,8 @@ if [ -z "${GITHUB_URL:-}" ]; then
   fi
 fi
 
-# Define SOURCE configuration for GitHub
-if [[ "$GITHUB_URL" == *"https://"* ]]; then
-  # For public repositories or HTTPS URLs
-  SOURCE="{\"type\":\"GITHUB\",\"location\":\"$GITHUB_URL\",\"reportBuildStatus\":true}"
-else
-  # For SSH URLs
-  SOURCE="{\"type\":\"GITHUB\",\"location\":\"$GITHUB_URL\",\"reportBuildStatus\":true,\"auth\":{\"type\":\"OAUTH\"}}"
-fi
+# Define SOURCE configuration for GitHub - using NO_SOURCE to avoid connection issues
+SOURCE="{\"type\":\"NO_SOURCE\"}"
 
 # Create or update CodeBuild project
 if aws codebuild batch-get-projects --names "$CODEBUILD_PROJECT_NAME" --query 'projects[0].name' --output text 2>/dev/null | grep -q "$CODEBUILD_PROJECT_NAME"; then
@@ -487,7 +481,8 @@ fi
 echo "Starting deployment build..."
 BUILD_ID=$(aws codebuild start-build \
   --project-name "$CODEBUILD_PROJECT_NAME" \
-  --buildspec-override "buildspec.yml" \
+  --source-type-override NO_SOURCE \
+  --buildspec-override "$(cat buildspec.yml)" \
   --query 'build.id' \
   --output text)
 
