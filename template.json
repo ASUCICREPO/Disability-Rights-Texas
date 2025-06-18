@@ -27,7 +27,8 @@
             "arn:aws:lambda:us-west-2:580247275435:layer:LambdaInsightsExtension:14"
           ]
         }
-      },
+      }
+    },
       "AmazonQBusinessFeedbackFunction": {
   "Type": "AWS::Lambda::Function",
   "Properties": {
@@ -421,4 +422,3 @@
       }
     }
   }
-}
