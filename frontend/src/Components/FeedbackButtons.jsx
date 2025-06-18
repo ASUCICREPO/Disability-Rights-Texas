@@ -10,7 +10,7 @@ function FeedbackButtons({ messageId, conversationId }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Application ID from environment or default
-  const applicationId = CONFIG.api.applicationId || 'default-app-id';
+  const applicationId = CONFIG.api.applicationId;
   
   // Handle feedback submission
   const handleFeedback = async (type) => {

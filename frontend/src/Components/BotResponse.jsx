@@ -6,6 +6,7 @@ import AmazonQService from "../services/amazonQService";
 import BotAvatar from "../Assets/BotAvatar.svg";
 import { ALLOW_MARKDOWN_BOT, ALLOW_FEEDBACK } from "../utilities/constants";
 import ReactMarkdown from "react-markdown";
+import CONFIG from "../config";
 
 const BotResponse = ({ message, citations = [], messageId = "", conversationId = "", state = "RECEIVED" }) => {
   // Debug logging for initial props
@@ -70,7 +71,10 @@ const BotResponse = ({ message, citations = [], messageId = "", conversationId =
     });
     
     try {
-      const result = await AmazonQService.sendFeedback(updatedFeedback, messageId, conversationId);
+      // Pass the hardcoded applicationId directly to the sendFeedback method
+      const applicationId = CONFIG.api.applicationId;
+      console.log('Using application ID in botresponse test:', applicationId);
+      const result = await AmazonQService.sendFeedback(updatedFeedback, messageId, conversationId, applicationId);
       
       if (result.success) {
         setFeedback(updatedFeedback);

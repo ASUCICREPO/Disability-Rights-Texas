@@ -119,26 +119,22 @@ class AmazonQService {
    * @param {string} feedback - The feedback type ('UPVOTED' or 'DOWNVOTED')
    * @param {string} messageId - The ID of the message being rated
    * @param {string} conversationId - The ID of the conversation
+   * @param {string} [applicationId] - Optional application ID, will use CONFIG.api.applicationId if not provided
    * @returns {Promise} - Promise resolving to the API response
    */
-  static async sendFeedback(feedback, messageId, conversationId) {
+  static async sendFeedback(feedback, messageId, conversationId, applicationId) {
     try {
-      // Use the application ID from CONFIG
-      const applicationId = process.env.REACT_APP_APPLICATION_ID;
-      console.log("Using env application ID:", applicationId);
+      // Use provided applicationId or fall back to CONFIG
+      applicationId = applicationId || CONFIG.api.applicationId;
+      console.log("Using application ID:", applicationId);
       console.log("Application ID type:", typeof applicationId);
       console.log("Application ID length:", applicationId ? applicationId.length : 0);
-      console.log("Application ID value:", applicationId);
       console.log("Feedback endpoint template:", CONFIG.api.feedbackEndpoint);
       
       if (!messageId || !conversationId) {
         console.error('Missing required IDs for feedback');
         return { success: false, error: 'Missing message or conversation ID' };
       }
-
-      // Use a hardcoded valid application ID that meets the validation requirements
-      const validAppId = "849dfd49-fa01-4490-957a-47ead06e53bb";
-      console.warn("FEEDBACK DEBUG - Using hardcoded valid application ID:", validAppId);
       
       // Construct the feedback endpoint URL with the required parameters
       // Use string literals with explicit string replacement to avoid issues with curly braces
