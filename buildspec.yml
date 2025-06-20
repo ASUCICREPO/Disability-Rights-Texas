@@ -9,11 +9,9 @@ env:
 phases:
   install:
     runtime-versions:
-      nodejs: 16
+      nodejs: 18
     commands:
       - echo "🔧 Installing tools"
-      - yum install -y jq zip
-      - npm install -g aws-cli
       - npm install -g @aws-amplify/cli
 
   pre_build:
