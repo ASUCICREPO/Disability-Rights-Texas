@@ -55,6 +55,10 @@ if [ -z "${AWS_ACCOUNT_ID:-}" ]; then
   fi
 fi
 
+if [ -z "${APPLICATION_ID:-}" ]; then
+  read -rp "Enter Q Business Application ID: " APPLICATION_ID
+fi
+
 if [ -z "${ACTION:-}" ]; then
   read -rp "Enter action [deploy/destroy]: " ACTION
   ACTION=$(printf '%s' "$ACTION" | tr '[:upper:]' '[:lower:]')
@@ -192,7 +196,8 @@ ENV_VARS=$(cat <<EOF
   {"name": "AWS_REGION", "value": "$AWS_REGION", "type": "PLAINTEXT"},
   {"name": "ACTION", "value": "$ACTION", "type": "PLAINTEXT"},
   {"name": "AMPLIFY_APP_NAME", "value": "$AMPLIFY_APP_NAME", "type": "PLAINTEXT"},
-  {"name": "AMPLIFY_BRANCH_NAME", "value": "$AMPLIFY_BRANCH_NAME", "type": "PLAINTEXT"}
+  {"name": "AMPLIFY_BRANCH_NAME", "value": "$AMPLIFY_BRANCH_NAME", "type": "PLAINTEXT"},
+  {"name": "APPLICATION_ID", "value": "$APPLICATION_ID", "type": "PLAINTEXT"}
 ]
 EOF
 )
