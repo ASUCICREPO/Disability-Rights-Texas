@@ -131,6 +131,15 @@ POLICY_DOC=$(cat <<EOF
         "logs:*"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "CodeConnectionsAccess",
+      "Effect": "Allow",
+      "Action": [
+        "codeconnections:*",
+        "codestar-connections:*"
+      ],
+      "Resource": "*"
     }
   ]
 }
@@ -200,17 +209,17 @@ EOF
 
 ARTIFACTS='{"type":"NO_ARTIFACTS"}'
 
+# Delete any existing CodeConnections that might interfere
+echo "Checking for existing connections..."
+aws codeconnections list-connections --provider-type GitHub --query 'Connections[?ConnectionStatus==`AVAILABLE`].ConnectionArn' --output text 2>/dev/null || true
+
 # Configure source for public GitHub repository - no auth needed
 SOURCE=$(cat <<EOF
 {
   "type": "GITHUB",
   "location": "$GITHUB_URL",
   "buildspec": "buildspec.yml",
-  "gitCloneDepth": 1,
-  "gitSubmodulesConfig": {
-    "fetchSubmodules": false
-  },
-  "insecureSsl": false
+  "gitCloneDepth": 1
 }
 EOF
 )
