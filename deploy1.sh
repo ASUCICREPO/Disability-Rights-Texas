@@ -364,24 +364,16 @@ if [ "$APPLICATION_ID" = "create" ]; then
     --index-id $INDEX_ID \
     --display-name "WebCrawler-DisabilityRightsTX" \
     --configuration '{
+      "type": "WEBCRAWLER",
       "connectionConfiguration": {
         "repositoryEndpointMetadata": {
-          "siteMapUrls": ["https://disabilityrightstx.org/sitemap.xml"]
+          "urls": ["https://disabilityrightstx.org/en/home/"]
         }
       },
-      "repositoryConfigurations": {
-        "webPage": {
-          "fieldMappings": [
-            {
-              "dataSourceFieldName": "url",
-              "indexFieldName": "web_crawler_url",
-              "indexFieldType": "STRING"
-            }
-          ]
-        }
-      },
-      "type": "WEBCRAWLERV2",
-      "syncMode": "FULL_CRAWL"
+      "crawlDepth": 3,
+      "crawlSubDomains": true,
+      "crawlAttachments": true,
+      "syncSchedule": "ON_DEMAND"
     }' \
     --role-arn "$QBUSINESS_ROLE_ARN" \
     --region $AWS_REGION \
