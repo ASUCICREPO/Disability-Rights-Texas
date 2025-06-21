@@ -68,6 +68,62 @@ if [[ "$ACTION" != "deploy" && "$ACTION" != "destroy" ]]; then
   exit 1
 fi
 
+# Handle destroy action
+if [[ "$ACTION" == "destroy" ]]; then
+  echo "=== Starting resource cleanup ==="
+  
+  # Ask for Q Business Application ID if not provided
+  if [ -z "${APPLICATION_ID:-}" ] || [ "$APPLICATION_ID" = "create" ]; then
+    read -rp "Enter Q Business Application ID to destroy: " APPLICATION_ID
+  fi
+  
+  if [ -n "$APPLICATION_ID" ] && [ "$APPLICATION_ID" != "create" ]; then
+    echo "Cleaning up Q Business resources for application: $APPLICATION_ID"
+    
+    # List and delete all data sources
+    echo "Listing data sources..."
+    DATA_SOURCES=$(aws qbusiness list-data-sources --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'dataSources[*].dataSourceId' --output text 2>/dev/null || echo "")
+    
+    for DS_ID in $DATA_SOURCES; do
+      echo "Deleting data source: $DS_ID"
+      aws qbusiness delete-data-source --application-id "$APPLICATION_ID" --data-source-id "$DS_ID" --region "$AWS_REGION" || true
+    done
+    
+    # List and delete all indices
+    echo "Listing indices..."
+    INDICES=$(aws qbusiness list-indices --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'indices[*].indexId' --output text 2>/dev/null || echo "")
+    
+    for INDEX_ID in $INDICES; do
+      echo "Deleting index: $INDEX_ID"
+      aws qbusiness delete-index --application-id "$APPLICATION_ID" --index-id "$INDEX_ID" --region "$AWS_REGION" || true
+    done
+    
+    # Delete the application
+    echo "Deleting Q Business application: $APPLICATION_ID"
+    aws qbusiness delete-application --application-id "$APPLICATION_ID" --region "$AWS_REGION" || true
+  fi
+  
+  # Delete CodeBuild project
+  CODEBUILD_PROJECT_NAME="${PROJECT_NAME}-deploy"
+  echo "Deleting CodeBuild project: $CODEBUILD_PROJECT_NAME"
+  aws codebuild delete-project --name "$CODEBUILD_PROJECT_NAME" 2>/dev/null || true
+  
+  # Delete IAM roles and policies
+  QBUSINESS_ROLE_NAME="${PROJECT_NAME}-qbusiness-role"
+  echo "Deleting Q Business IAM role: $QBUSINESS_ROLE_NAME"
+  aws iam delete-role-policy --role-name "$QBUSINESS_ROLE_NAME" --policy-name "${PROJECT_NAME}-qbusiness-policy" 2>/dev/null || true
+  aws iam delete-role --role-name "$QBUSINESS_ROLE_NAME" 2>/dev/null || true
+  
+  ROLE_NAME="${PROJECT_NAME}-codebuild-service-role"
+  POLICY_NAME="${PROJECT_NAME}-deployment-policy"
+  echo "Deleting CodeBuild IAM role: $ROLE_NAME"
+  aws iam delete-role-policy --role-name "$ROLE_NAME" --policy-name "$POLICY_NAME" 2>/dev/null || true
+  aws iam delete-role --role-name "$ROLE_NAME" 2>/dev/null || true
+  
+  echo "✓ Resource cleanup completed"
+  exit 0
+fi
+
 # Create IAM role for CodeBuild
 ROLE_NAME="${PROJECT_NAME}-codebuild-service-role"
 POLICY_NAME="${PROJECT_NAME}-deployment-policy"
@@ -307,7 +363,34 @@ if [ "$APPLICATION_ID" = "create" ]; then
     --application-id $APPLICATION_ID \
     --index-id $INDEX_ID \
     --display-name "WebCrawler-DisabilityRightsTX" \
-    --configuration '{"type":"WEBCRAWLERV2","connectionConfiguration":{"repositoryEndpointMetadata":{"siteMapUrls":["https://disabilityrightstx.org/en/home/"]}},"repositoryConfigurations":{"webPage":{"fieldMappings":[{"indexFieldName":"web_crawler_url","indexFieldType":"STRING","dataSourceFieldName":"url"}]}},"additionalProperties":{"crawlDepth":3,"crawlSubDomains":true,"crawlAllDomains":false},"syncMode":"FULL_CRAWL"}' \
+    --configuration '{
+      "type":"WEBCRAWLERV2",
+      "connectionConfiguration":{
+        "repositoryEndpointMetadata":{
+          "siteMapUrls":["https://disabilityrightstx.org/en/home/"]
+        }
+      },
+      "repositoryConfigurations":{
+        "webPage":{
+          "fieldMappings":[{
+            "indexFieldName":"web_crawler_url",
+            "indexFieldType":"STRING",
+            "dataSourceFieldName":"url"
+          }]
+        }
+      },
+      "webcrawlerConfiguration":{
+        "crawlDepth":"3",
+        "crawlSubDomains":"true",
+        "crawlAllDomains":"false",
+        "maxLinksPerPage":"100",
+        "maxContentSizePerPageInMegaBytes":"50",
+        "maxUrlsPerMinuteCrawlRate":"300",
+        "urlInclusionPatterns":[],
+        "urlExclusionPatterns":[]
+      },
+      "syncMode":"FULL_CRAWL"
+    }' \
     --role-arn "$QBUSINESS_ROLE_ARN" \
     --region $AWS_REGION \
     --output json)
