@@ -200,7 +200,7 @@ if [ "$APPLICATION_ID" = "create" ]; then
   echo "Creating Q Business application..."
   APP_RESPONSE=$(aws qbusiness create-application \
     --display-name "DisabilityRightsTexas" \
-    --identity-type "AWS_IAM_IDC" \
+    --identity-type "ANONYMOUS" \
     --region $AWS_REGION \
     --output json)
   
