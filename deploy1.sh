@@ -247,8 +247,7 @@ if [ "$APPLICATION_ID" = "create" ]; then
     --application-id $APPLICATION_ID \
     --index-id $INDEX_ID \
     --display-name "WebCrawler-DisabilityRightsTX" \
-    --type "WEBCRAWLERV2" \
-    --configuration '{"connectionConfiguration":{"repositoryEndpointMetadata":{"siteMapUrls":["https://disabilityrightstx.org/en/home/"]}},"repositoryConfigurations":{"webPage":{"fieldMappings":[{"indexFieldName":"web_crawler_url","indexFieldType":"STRING","dataSourceFieldName":"url"}]}},"additionalProperties":{"crawlDepth":3,"crawlSubDomains":true,"crawlAllDomains":false},"syncMode":"FULL_CRAWL"}' \
+    --configuration '{"type":"WEBCRAWLERV2","connectionConfiguration":{"repositoryEndpointMetadata":{"siteMapUrls":["https://disabilityrightstx.org/en/home/"]}},"repositoryConfigurations":{"webPage":{"fieldMappings":[{"indexFieldName":"web_crawler_url","indexFieldType":"STRING","dataSourceFieldName":"url"}]}},"additionalProperties":{"crawlDepth":3,"crawlSubDomains":true,"crawlAllDomains":false},"syncMode":"FULL_CRAWL"}' \
     --region $AWS_REGION \
     --output json)
   
