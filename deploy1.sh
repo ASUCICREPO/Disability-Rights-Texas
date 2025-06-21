@@ -241,6 +241,66 @@ if [ "$APPLICATION_ID" = "create" ]; then
     sleep 15
   done
   
+  # Create IAM role for Q Business
+  QBUSINESS_ROLE_NAME="${PROJECT_NAME}-qbusiness-role"
+  echo "Creating IAM role for Q Business: $QBUSINESS_ROLE_NAME"
+  
+  QBUSINESS_TRUST_DOC='{
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Principal": {"Service": "qbusiness.amazonaws.com"},
+      "Action": "sts:AssumeRole"
+    }]
+  }'
+  
+  QBUSINESS_POLICY_DOC='{
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Action": [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:ListBucket"
+        ],
+        "Resource": "*"
+      }
+    ]
+  }'
+  
+  # Create or update the role
+  if aws iam get-role --role-name "$QBUSINESS_ROLE_NAME" >/dev/null 2>&1; then
+    echo "✓ Q Business IAM role exists"
+    QBUSINESS_ROLE_ARN=$(aws iam get-role --role-name "$QBUSINESS_ROLE_NAME" --query 'Role.Arn' --output text)
+    
+    # Update the trust relationship
+    aws iam update-assume-role-policy \
+      --role-name "$QBUSINESS_ROLE_NAME" \
+      --policy-document "$QBUSINESS_TRUST_DOC"
+      
+    # Update the policy
+    aws iam put-role-policy \
+      --role-name "$QBUSINESS_ROLE_NAME" \
+      --policy-name "${PROJECT_NAME}-qbusiness-policy" \
+      --policy-document "$QBUSINESS_POLICY_DOC"
+  else
+    echo "✱ Creating Q Business IAM role: $QBUSINESS_ROLE_NAME"
+    QBUSINESS_ROLE_ARN=$(aws iam create-role \
+      --role-name "$QBUSINESS_ROLE_NAME" \
+      --assume-role-policy-document "$QBUSINESS_TRUST_DOC" \
+      --query 'Role.Arn' --output text)
+    
+    # Attach policy
+    aws iam put-role-policy \
+      --role-name "$QBUSINESS_ROLE_NAME" \
+      --policy-name "${PROJECT_NAME}-qbusiness-policy" \
+      --policy-document "$QBUSINESS_POLICY_DOC"
+    
+    echo "Waiting for IAM role to propagate..."
+    sleep 10
+  fi
+  
   # Create Web Crawler data source
   echo "Creating Web Crawler data source..."
   WEB_DS_RESPONSE=$(aws qbusiness create-data-source \
@@ -248,6 +308,7 @@ if [ "$APPLICATION_ID" = "create" ]; then
     --index-id $INDEX_ID \
     --display-name "WebCrawler-DisabilityRightsTX" \
     --configuration '{"type":"WEBCRAWLERV2","connectionConfiguration":{"repositoryEndpointMetadata":{"siteMapUrls":["https://disabilityrightstx.org/en/home/"]}},"repositoryConfigurations":{"webPage":{"fieldMappings":[{"indexFieldName":"web_crawler_url","indexFieldType":"STRING","dataSourceFieldName":"url"}]}},"additionalProperties":{"crawlDepth":3,"crawlSubDomains":true,"crawlAllDomains":false},"syncMode":"FULL_CRAWL"}' \
+    --role-arn "$QBUSINESS_ROLE_ARN" \
     --region $AWS_REGION \
     --output json)
   
