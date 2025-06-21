@@ -195,14 +195,12 @@ fi
 
 # Q Business Setup Automation
 echo "=== Setting up Q Business Application ==="
-  echo "=== Setting up Q Business Application ==="
-  
-  # Create Q Business application
+if [ "$APPLICATION_ID" = "create" ]; then
+  # Create Q Business application with anonymous access
   echo "Creating Q Business application..."
   APP_RESPONSE=$(aws qbusiness create-application \
     --display-name "DisabilityRightsTexas" \
-    --identity-type "AWS_IAM_IDP_OIDC" \
-    --identity-center-instance-arn "" \
+    --identity-type "AWS_IAM" \
     --region $AWS_REGION \
     --output json)
   
@@ -264,7 +262,8 @@ echo "=== Setting up Q Business Application ==="
   echo ""
   echo "📝 Next Steps:"
   echo "   1. Sync web crawler data source in Q Business console"
-  echo "   2. Configure log delivery in Admin Controls"
+  echo "   2. Configure web experience for anonymous access"
+fi
 
 # Create CodeBuild project
 CODEBUILD_PROJECT_NAME="${PROJECT_NAME}-deploy"
