@@ -379,6 +379,7 @@ if [ "$APPLICATION_ID" = "create" ]; then
           }]
         }
       },
+      "webcrawlerMode":"SITEMAP_ONLY",
       "webcrawlerConfiguration":{
         "crawlDepth":"3",
         "crawlSubDomains":"true",
