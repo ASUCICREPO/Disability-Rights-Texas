@@ -364,33 +364,24 @@ if [ "$APPLICATION_ID" = "create" ]; then
     --index-id $INDEX_ID \
     --display-name "WebCrawler-DisabilityRightsTX" \
     --configuration '{
-      "type":"WEBCRAWLERV2",
-      "connectionConfiguration":{
-        "repositoryEndpointMetadata":{
-          "siteMapUrls":["https://disabilityrightstx.org/en/home/"]
+      "connectionConfiguration": {
+        "repositoryEndpointMetadata": {
+          "siteMapUrls": ["https://disabilityrightstx.org/sitemap.xml"]
         }
       },
-      "repositoryConfigurations":{
-        "webPage":{
-          "fieldMappings":[{
-            "indexFieldName":"web_crawler_url",
-            "indexFieldType":"STRING",
-            "dataSourceFieldName":"url"
-          }]
+      "repositoryConfigurations": {
+        "webPage": {
+          "fieldMappings": [
+            {
+              "dataSourceFieldName": "url",
+              "indexFieldName": "web_crawler_url",
+              "indexFieldType": "STRING"
+            }
+          ]
         }
       },
-      "webcrawlerMode":"SITEMAP_ONLY",
-      "webcrawlerConfiguration":{
-        "crawlDepth":"3",
-        "crawlSubDomains":"true",
-        "crawlAllDomains":"false",
-        "maxLinksPerPage":"100",
-        "maxContentSizePerPageInMegaBytes":"50",
-        "maxUrlsPerMinuteCrawlRate":"300",
-        "urlInclusionPatterns":[],
-        "urlExclusionPatterns":[]
-      },
-      "syncMode":"FULL_CRAWL"
+      "type": "WEBCRAWLERV2",
+      "syncMode": "FULL_CRAWL"
     }' \
     --role-arn "$QBUSINESS_ROLE_ARN" \
     --region $AWS_REGION \
