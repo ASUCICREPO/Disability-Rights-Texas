@@ -359,25 +359,41 @@ if [ "$APPLICATION_ID" = "create" ]; then
   
   # Create Web Crawler data source
   echo "Creating Web Crawler data source..."
+  DATA_SOURCE_NAME="DisabilityRightsWebCrawler"
+
+  # Build the JSON configuration per the Web Crawler schema:
+  read -r -d '' WEBCRAWLER_CONFIG <<EOF
+{
+  "type": "WEBCRAWLERV2",
+  "syncMode": "FULL_CRAWL",
+  "connectionConfiguration": {
+    "repositoryEndpointMetadata": {
+      "seedUrlConnections": [
+        { "seedUrl": "https://disabilityrightstx.org/en/home/" }
+      ],
+      "authentication": "NoAuthentication"
+    }
+  },
+  "additionalProperties": {
+    "crawlDepth": "3",
+    "crawlSubDomain": true,
+    "crawlAttachments": true
+  },
+  "version": "1.0.0"
+}
+EOF
+
   WEB_DS_RESPONSE=$(aws qbusiness create-data-source \
-    --application-id $APPLICATION_ID \
-    --index-id $INDEX_ID \
-    --display-name "WebCrawler-DisabilityRightsTX" \
-    --configuration '{
-      "type": "WEBCRAWLER",
-      "connectionConfiguration": {
-        "repositoryEndpointMetadata": {
-          "urls": ["https://disabilityrightstx.org/en/home/"]
-        }
-      },
-      "crawlDepth": 3,
-      "crawlSubDomains": true,
-      "crawlAttachments": true,
-      "syncSchedule": "ON_DEMAND"
-    }' \
+    --application-id "$APPLICATION_ID" \
+    --index-id "$INDEX_ID" \
+    --display-name "$DATA_SOURCE_NAME" \
+    --configuration "$WEBCRAWLER_CONFIG" \
     --role-arn "$QBUSINESS_ROLE_ARN" \
-    --region $AWS_REGION \
+    --sync-schedule "" \
+    --region "$AWS_REGION" \
     --output json)
+  
+  WEB_DS_ID=$(echo $WEB_DS_RESPONSE | jq -r '.dataSourceId')
   
   WEB_DS_ID=$(echo $WEB_DS_RESPONSE | jq -r '.dataSourceId')
   echo "✓ Created Web Crawler Data Source: $WEB_DS_ID"
