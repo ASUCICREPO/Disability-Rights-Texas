@@ -362,7 +362,7 @@ if [ "$APPLICATION_ID" = "create" ]; then
   DATA_SOURCE_NAME="DisabilityRightsWebCrawler"
 
   # Build the JSON configuration per the Web Crawler schema:
-  read -r -d '' WEBCRAWLER_CONFIG <<EOF
+  WEBCRAWLER_CONFIG=$(cat <<'EOF'
 {
   "type": "WEBCRAWLERV2",
   "syncMode": "FULL_CRAWL",
@@ -382,6 +382,7 @@ if [ "$APPLICATION_ID" = "create" ]; then
   "version": "1.0.0"
 }
 EOF
+)
 
   WEB_DS_RESPONSE=$(aws qbusiness create-data-source \
     --application-id "$APPLICATION_ID" \
