@@ -17,7 +17,7 @@ phases:
 
   pre_build:
     commands:
-      - echo "=== PHASE 2: Backend Deployment ==="
+      - echo "=== PHASE 2 Backend Deployment ==="
       - echo "🔍 Checking CloudFormation stack"
       - |
         if aws cloudformation describe-stacks --stack-name $STACK_NAME --region $REGION > /dev/null 2>&1; then
@@ -59,13 +59,13 @@ phases:
         EOF
       - echo "🔍 Generated .env file:"
       - cat frontend/.env
-      - echo "=== PHASE 3: Frontend Preparation ==="
+      - echo "=== PHASE 3 Frontend Preparation ==="
       - echo "📦 Installing frontend dependencies"
       - cd frontend && npm install && cd ..
 
   build:
     commands:
-      - echo "=== PHASE 4: Frontend Build ==="
+      - echo "=== PHASE 4 Frontend Build ==="
       - echo "🏗️ Building frontend"
       - cd frontend && npm run build && cd ..
       - echo "📦 Zipping build output"
@@ -73,7 +73,7 @@ phases:
 
   post_build:
     commands:
-      - echo "=== PHASE 5: Amplify Deployment ==="
+      - echo "=== PHASE 5 Amplify Deployment ==="
       - echo "🚧 Initializing Amplify app and branch"
       - |
         AMPLIFY_APP_ID=$(aws amplify list-apps --region $REGION --query "apps[?name=='DisabilityRightsTexas'].appId" --output text)
