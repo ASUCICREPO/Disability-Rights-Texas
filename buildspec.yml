@@ -11,7 +11,7 @@ phases:
     runtime-versions:
       nodejs: 18
     commands:
-      - echo "=== PHASE 1: Installing Dependencies ==="
+      - echo "=== PHASE 1 Installing Dependencies ==="
       - echo "🔧 Installing tools"
       - npm install -g @aws-amplify/cli
 
