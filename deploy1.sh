@@ -359,45 +359,66 @@ if [ "$APPLICATION_ID" = "create" ]; then
   
   # Create Web Crawler data source
   echo "Creating Web Crawler data source..."
-  DATA_SOURCE_NAME="DisabilityRightsWebCrawler"
+DATA_SOURCE_NAME="DisabilityRightsWebCrawler"
 
-  # Build the JSON configuration per the Web Crawler schema:
-  WEBCRAWLER_CONFIG=$(cat <<'EOF'
+# Build the JSON payload per the Web Crawler JSON schema :contentReference[oaicite:0]{index=0}
+read -r -d '' WEBCRAWLER_CONFIG <<EOF
 {
   "type": "WEBCRAWLERV2",
   "syncMode": "FULL_CRAWL",
   "connectionConfiguration": {
     "repositoryEndpointMetadata": {
+      "authentication": "NoAuthentication",
       "seedUrlConnections": [
         { "seedUrl": "https://disabilityrightstx.org/en/home/" }
-      ],
-      "authentication": "NoAuthentication"
+      ]
+    }
+  },
+  "repositoryConfigurations": {
+    "webPage": {
+      "fieldMappings": [
+        {
+          "indexFieldName": "Title",
+          "indexFieldType": "STRING",
+          "dataSourceFieldName": "htmlTitle"
+        },
+        {
+          "indexFieldName": "Url",
+          "indexFieldType": "STRING",
+          "dataSourceFieldName": "url"
+        }
+      ]
     }
   },
   "additionalProperties": {
     "crawlDepth": "3",
+    "maxLinksPerUrl": "100",
     "crawlSubDomain": true,
     "crawlAttachments": true
   },
   "version": "1.0.0"
 }
 EOF
-)
 
-  WEB_DS_RESPONSE=$(aws qbusiness create-data-source \
-    --application-id "$APPLICATION_ID" \
-    --index-id "$INDEX_ID" \
-    --display-name "$DATA_SOURCE_NAME" \
-    --configuration "$WEBCRAWLER_CONFIG" \
-    --role-arn "$QBUSINESS_ROLE_ARN" \
-    --sync-schedule "" \
-    --region "$AWS_REGION" \
-    --output json)
-  
-  WEB_DS_ID=$(echo $WEB_DS_RESPONSE | jq -r '.dataSourceId')
-  
-  WEB_DS_ID=$(echo $WEB_DS_RESPONSE | jq -r '.dataSourceId')
-  echo "✓ Created Web Crawler Data Source: $WEB_DS_ID"
+# Call the Q Business API
+if response=$(aws qbusiness create-data-source \
+      --application-id "$APPLICATION_ID" \
+      --index-id       "$INDEX_ID" \
+      --display-name   "$DATA_SOURCE_NAME" \
+      --configuration  "$WEBCRAWLER_CONFIG" \
+      --role-arn       "$ROLE_ARN" \
+      --sync-schedule  "" \
+      --region         "$AWS_REGION" \
+      --output json 2>&1); then
+
+  DATA_SOURCE_ID=$(echo "$response" | jq -r '.dataSourceId // .Id')
+  echo "✅ Web Crawler data source created with ID: $DATA_SOURCE_ID"
+
+else
+  echo "❌ Failed to create Web Crawler data source:" >&2
+  echo "$response" >&2
+  exit 1
+fi
   
   echo "📋 Q Business Setup Complete:"
   echo "   Application ID: $APPLICATION_ID"
