@@ -256,14 +256,21 @@ fi
 # === PHASE 3: Q Business Application Setup ===
 echo "=== PHASE 3: Q Business Application Setup ==="
 
-# Create Q Business application with anonymous access
-APP_RESPONSE=$(aws qbusiness create-application \
-  --display-name "DisabilityRightsTexas" \
-  --identity-type "ANONYMOUS" \
-  --region "$AWS_REGION" \
-  --output json)
-APPLICATION_ID=$(echo "$APP_RESPONSE" | jq -r '.applicationId')
-echo "✓ Created Q Business Application: $APPLICATION_ID"
+# Check for existing Q Business application before creating a new one
+EXISTING_APP_ID=$(aws qbusiness list-applications --region "$AWS_REGION" --query 'applications[?displayName==`DisabilityRightsTexas`].applicationId' --output text)
+if [ -n "$EXISTING_APP_ID" ] && [ "$EXISTING_APP_ID" != "None" ]; then
+  echo "✓ Found existing Q Business Application: $EXISTING_APP_ID"
+  APPLICATION_ID="$EXISTING_APP_ID"
+else
+  # Create Q Business application with anonymous access
+  APP_RESPONSE=$(aws qbusiness create-application \
+    --display-name "DisabilityRightsTexas" \
+    --identity-type "ANONYMOUS" \
+    --region "$AWS_REGION" \
+    --output json)
+  APPLICATION_ID=$(echo "$APP_RESPONSE" | jq -r '.applicationId')
+  echo "✓ Created Q Business Application: $APPLICATION_ID"
+fi
 
 # Wait for application to be active
 echo "Waiting for application to be active..."
