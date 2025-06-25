@@ -256,6 +256,7 @@ fi
 # === PHASE 3: Q Business Application Setup ===
 echo "=== PHASE 3: Q Business Application Setup ==="
 
+# Q Business application is configured for anonymous user access
 # Check for existing Q Business application before creating a new one
 EXISTING_APP_ID=$(aws qbusiness list-applications --region "$AWS_REGION" --query 'applications[?displayName==`DisabilityRightsTexas`].applicationId' --output text)
 if [ -n "$EXISTING_APP_ID" ] && [ "$EXISTING_APP_ID" != "None" ]; then
@@ -289,8 +290,8 @@ if [ -n "$EXISTING_INDEX_ID" ] && [ "$EXISTING_INDEX_ID" != "None" ]; then
   echo "✓ Found existing Q Business Index: $EXISTING_INDEX_ID"
   INDEX_ID="$EXISTING_INDEX_ID"
 else
-  # Create index
-  echo "Creating Q Business index..."
+  # Create starter index
+  echo "Creating Q Business starter index..."
   INDEX_RESPONSE=$(aws qbusiness create-index \
     --application-id "$APPLICATION_ID" \
     --display-name "DisabilityRightsIndex" \
@@ -298,7 +299,7 @@ else
     --region "$AWS_REGION" \
     --output json)
   INDEX_ID=$(echo "$INDEX_RESPONSE" | jq -r '.indexId')
-  echo "✓ Created Index: $INDEX_ID"
+  echo "✓ Created Starter Index: $INDEX_ID"
 fi
 
 # Wait for index to be active
