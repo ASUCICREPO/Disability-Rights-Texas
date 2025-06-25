@@ -378,11 +378,35 @@ if [ "$APPLICATION_ID" = "create" ]; then
   if [ "$APPLICATION_ID" = "create" ]; then
     # Existing Q Business application creation logic...
 
-    # Add S3 bucket as a data source
-    echo "Adding S3 bucket as a data source to Q Business application..."
-    S3_DATA_SOURCE_NAME="DisabilityRightsS3DataSource"
+    # Ensure the index is created before adding the S3 data source
+    if [ "$APPLICATION_ID" = "create" ]; then
+      echo "Creating Q Business index..."
+      INDEX_RESPONSE=$(aws qbusiness create-index \
+        --application-id "$APPLICATION_ID" \
+        --display-name "DisabilityRightsIndex" \
+        --type "STARTER" \
+        --region "$AWS_REGION" \
+        --output json)
 
-    S3_DATA_SOURCE_CONFIG=$(cat <<EOF
+      INDEX_ID=$(echo "$INDEX_RESPONSE" | jq -r '.indexId')
+      echo "✓ Created Index: $INDEX_ID"
+
+      # Wait for index to be active
+      echo "Waiting for index to be active..."
+      while true; do
+        STATUS=$(aws qbusiness get-index --application-id "$APPLICATION_ID" --index-id "$INDEX_ID" --region "$AWS_REGION" --query 'status' --output text)
+        if [ "$STATUS" = "ACTIVE" ]; then
+          break
+        fi
+        echo "Index status: $STATUS, waiting..."
+        sleep 15
+      done
+
+      # Add S3 bucket as a data source
+      echo "Adding S3 bucket as a data source to Q Business application..."
+      S3_DATA_SOURCE_NAME="DisabilityRightsS3DataSource"
+
+      S3_DATA_SOURCE_CONFIG=$(cat <<EOF
 {
   "type": "S3",
   "syncMode": "FULL_SYNC",
@@ -409,30 +433,31 @@ if [ "$APPLICATION_ID" = "create" ]; then
   "version": "1.0.0"
 }
 EOF
-    )
+      )
 
-    S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
-      --application-id "$APPLICATION_ID" \
-      --index-id "$INDEX_ID" \
-      --display-name "$S3_DATA_SOURCE_NAME" \
-      --configuration "$S3_DATA_SOURCE_CONFIG" \
-      --role-arn "$ROLE_ARN" \
-      --region "$AWS_REGION" \
-      --output json 2>&1)
+      S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
+        --application-id "$APPLICATION_ID" \
+        --index-id "$INDEX_ID" \
+        --display-name "$S3_DATA_SOURCE_NAME" \
+        --configuration "$S3_DATA_SOURCE_CONFIG" \
+        --role-arn "$ROLE_ARN" \
+        --region "$AWS_REGION" \
+        --output json 2>&1)
 
-    if [ $? -eq 0 ]; then
-      S3_DATA_SOURCE_ID=$(echo "$S3_DATA_SOURCE_RESPONSE" | jq -r '.dataSourceId')
-      echo "✓ S3 data source added with ID: $S3_DATA_SOURCE_ID"
-    else
-      echo "✗ Failed to add S3 data source:" >&2
-      echo "$S3_DATA_SOURCE_RESPONSE" >&2
-      exit 1
+      if [ $? -eq 0 ]; then
+        S3_DATA_SOURCE_ID=$(echo "$S3_DATA_SOURCE_RESPONSE" | jq -r '.dataSourceId')
+        echo "✓ S3 data source added with ID: $S3_DATA_SOURCE_ID"
+      else
+        echo "✗ Failed to add S3 data source:" >&2
+        echo "$S3_DATA_SOURCE_RESPONSE" >&2
+        exit 1
+      fi
+
+      echo "📋 Q Business Setup Updated:"
+      echo "   Application ID: $APPLICATION_ID"
+      echo "   Index ID: $INDEX_ID"
+      echo "   S3 Data Source ID: $S3_DATA_SOURCE_ID"
     fi
-
-    echo "📋 Q Business Setup Updated:"
-    echo "   Application ID: $APPLICATION_ID"
-    echo "   Index ID: $INDEX_ID"
-    echo "   S3 Data Source ID: $S3_DATA_SOURCE_ID"
   fi
 fi
 
