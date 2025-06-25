@@ -3,9 +3,10 @@ set -euo pipefail
 
 # Helper function for retries with exponential backoff
 retry() {
+  local max=$1
+  local delay=$2
+  shift 2
   local n=1
-  local max=${2:-5}
-  local delay=${3:-10}
   while true; do
     "$@" && break || {
       if [[ $n -lt $max ]]; then
@@ -303,11 +304,11 @@ else
   # Create Q Business application with anonymous access
   echo "Creating Q Business application..."
   APP_RESPONSE=""
-  retry bash -c 'APP_RESPONSE=$(aws qbusiness create-application \
+  retry 5 10 bash -c 'APP_RESPONSE=$(aws qbusiness create-application \
     --display-name "DisabilityRightsTexas" \
     --identity-type "ANONYMOUS" \
     --region $AWS_REGION \
-    --output json 2>&1)' 5 10
+    --output json 2>&1)'
   if [ -z "$APP_RESPONSE" ] || echo "$APP_RESPONSE" | grep -q 'error\|Error\|Exception'; then
     echo "✗ Failed to create Q Business application. Full response:" >&2
     echo "$APP_RESPONSE" >&2
@@ -332,12 +333,12 @@ else
   # Create index with retries
   echo "Creating Q Business index..."
   INDEX_RESPONSE=""
-  retry bash -c 'INDEX_RESPONSE=$(aws qbusiness create-index \
+  retry 5 10 bash -c 'INDEX_RESPONSE=$(aws qbusiness create-index \
     --application-id $APPLICATION_ID \
     --display-name "DisabilityRightsIndex" \
     --type "STARTER" \
     --region $AWS_REGION \
-    --output json)' 5 10
+    --output json)'
   if [ -z "$INDEX_RESPONSE" ]; then
     echo "✗ Failed to create Q Business index." >&2
     exit 1
@@ -413,14 +414,14 @@ EOF
 )
 
 S3_DATA_SOURCE_RESPONSE=""
-retry bash -c 'S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
+retry 5 10 bash -c 'S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
   --application-id "$APPLICATION_ID" \
   --index-id "$INDEX_ID" \
   --display-name "$S3_DATA_SOURCE_NAME" \
   --configuration "$S3_DATA_SOURCE_CONFIG" \
   --role-arn "$ROLE_ARN" \
   --region "$AWS_REGION" \
-  --output json 2>&1)' 5 10
+  --output json 2>&1)'
 if [ $? -eq 0 ] && [ -n "$S3_DATA_SOURCE_RESPONSE" ]; then
   S3_DATA_SOURCE_ID=$(echo "$S3_DATA_SOURCE_RESPONSE" | jq -r '.dataSourceId')
   echo "✓ S3 data source added with ID: $S3_DATA_SOURCE_ID"
