@@ -4,6 +4,8 @@ set -euo pipefail
 # Disability Rights Texas - Automated Deployment Script
 # This script sets up and triggers a CodeBuild project for deployment
 
+# === PHASE 1: Collect Parameters ===
+
 # Get GitHub repository URL
 if [ -z "${GITHUB_URL:-}" ]; then
   # Try to get the GitHub URL from git config
@@ -123,6 +125,8 @@ if [[ "$ACTION" == "destroy" ]]; then
   echo "✓ Resource cleanup completed"
   exit 0
 fi
+
+# === PHASE 2: IAM Role Setup ===
 
 # Create IAM role for CodeBuild
 ROLE_NAME="${PROJECT_NAME}-codebuild-service-role"
@@ -249,164 +253,74 @@ else
   sleep 10
 fi
 
-# Q Business Setup Automation
-echo "=== Setting up Q Business Application ==="
-if [ "$APPLICATION_ID" = "create" ]; then
-  # Create Q Business application with anonymous access
-  echo "Creating Q Business application..."
-  APP_RESPONSE=$(aws qbusiness create-application \
-    --display-name "DisabilityRightsTexas" \
-    --identity-type "ANONYMOUS" \
-    --region $AWS_REGION \
-    --output json)
-  
-  APPLICATION_ID=$(echo $APP_RESPONSE | jq -r '.applicationId')
-  echo "✓ Created Q Business Application: $APPLICATION_ID"
-  
-  # Wait for application to be active
-  echo "Waiting for application to be active..."
-  while true; do
-    STATUS=$(aws qbusiness get-application --application-id $APPLICATION_ID --region $AWS_REGION --query 'status' --output text)
-    if [ "$STATUS" = "ACTIVE" ]; then
-      break
-    fi
-    echo "Status: $STATUS, waiting..."
-    sleep 10
-  done
-  
-  # Create index
-  echo "Creating Q Business index..."
-  INDEX_RESPONSE=$(aws qbusiness create-index \
-    --application-id $APPLICATION_ID \
-    --display-name "DisabilityRightsIndex" \
-    --type "STARTER" \
-    --region $AWS_REGION \
-    --output json)
-  
-  INDEX_ID=$(echo $INDEX_RESPONSE | jq -r '.indexId')
-  echo "✓ Created Index: $INDEX_ID"
-  
-  # Wait for index to be active
-  echo "Waiting for index to be active..."
-  while true; do
-    STATUS=$(aws qbusiness get-index --application-id $APPLICATION_ID --index-id $INDEX_ID --region $AWS_REGION --query 'status' --output text)
-    if [ "$STATUS" = "ACTIVE" ]; then
-      break
-    fi
-    echo "Index status: $STATUS, waiting..."
-    sleep 15
-  done
-  
-  # Create IAM role for Q Business
-  QBUSINESS_ROLE_NAME="${PROJECT_NAME}-qbusiness-role"
-  echo "Creating IAM role for Q Business: $QBUSINESS_ROLE_NAME"
-  
-  QBUSINESS_TRUST_DOC='{
-    "Version": "2012-10-17",
-    "Statement": [{
-      "Effect": "Allow",
-      "Principal": {"Service": "qbusiness.amazonaws.com"},
-      "Action": "sts:AssumeRole"
-    }]
-  }'
-  
-  QBUSINESS_POLICY_DOC='{
-    "Version": "2012-10-17",
-    "Statement": [
-      {
-        "Effect": "Allow",
-        "Action": [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:ListBucket"
-        ],
-        "Resource": "*"
-      }
-    ]
-  }'
-  
-  # Create or update the role
-  if aws iam get-role --role-name "$QBUSINESS_ROLE_NAME" >/dev/null 2>&1; then
-    echo "✓ Q Business IAM role exists"
-    QBUSINESS_ROLE_ARN=$(aws iam get-role --role-name "$QBUSINESS_ROLE_NAME" --query 'Role.Arn' --output text)
-    
-    # Update the trust relationship
-    aws iam update-assume-role-policy \
-      --role-name "$QBUSINESS_ROLE_NAME" \
-      --policy-document "$QBUSINESS_TRUST_DOC"
-      
-    # Update the policy
-    aws iam put-role-policy \
-      --role-name "$QBUSINESS_ROLE_NAME" \
-      --policy-name "${PROJECT_NAME}-qbusiness-policy" \
-      --policy-document "$QBUSINESS_POLICY_DOC"
-  else
-    echo "✱ Creating Q Business IAM role: $QBUSINESS_ROLE_NAME"
-    QBUSINESS_ROLE_ARN=$(aws iam create-role \
-      --role-name "$QBUSINESS_ROLE_NAME" \
-      --assume-role-policy-document "$QBUSINESS_TRUST_DOC" \
-      --query 'Role.Arn' --output text)
-    
-    # Attach policy
-    aws iam put-role-policy \
-      --role-name "$QBUSINESS_ROLE_NAME" \
-      --policy-name "${PROJECT_NAME}-qbusiness-policy" \
-      --policy-document "$QBUSINESS_POLICY_DOC"
-    
-    echo "Waiting for IAM role to propagate..."
-    sleep 10
+# === PHASE 3: Q Business Application Setup ===
+echo "=== PHASE 3: Q Business Application Setup ==="
+
+# Create Q Business application with anonymous access and enable web experience
+APP_RESPONSE=$(aws qbusiness create-application \
+  --display-name "DisabilityRightsTexas" \
+  --identity-type "ANONYMOUS" \
+  --web-experience-url-enabled \
+  --region "$AWS_REGION" \
+  --output json)
+APPLICATION_ID=$(echo "$APP_RESPONSE" | jq -r '.applicationId')
+echo "✓ Created Q Business Application: $APPLICATION_ID"
+
+# Wait for application to be active
+echo "Waiting for application to be active..."
+while true; do
+  STATUS=$(aws qbusiness get-application --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'status' --output text)
+  if [ "$STATUS" = "ACTIVE" ]; then
+    break
   fi
-  
-  # Create S3 bucket and upload files from /docs folder
-  S3_BUCKET_NAME="${PROJECT_NAME}-docs-bucket"
-  echo "Checking for S3 bucket: $S3_BUCKET_NAME"
+  echo "Application status: $STATUS, waiting..."
+  sleep 10
+done
 
-  if aws s3api head-bucket --bucket "$S3_BUCKET_NAME" 2>/dev/null; then
-    echo "✓ S3 bucket exists: $S3_BUCKET_NAME"
-  else
-    echo "✱ Creating S3 bucket: $S3_BUCKET_NAME"
-    aws s3api create-bucket --bucket "$S3_BUCKET_NAME" --region "$AWS_REGION" --create-bucket-configuration LocationConstraint="$AWS_REGION"
-    echo "✓ S3 bucket created: $S3_BUCKET_NAME"
+# Create index
+echo "Creating Q Business index..."
+INDEX_RESPONSE=$(aws qbusiness create-index \
+  --application-id "$APPLICATION_ID" \
+  --display-name "DisabilityRightsIndex" \
+  --type "STARTER" \
+  --region "$AWS_REGION" \
+  --output json)
+INDEX_ID=$(echo "$INDEX_RESPONSE" | jq -r '.indexId')
+echo "✓ Created Index: $INDEX_ID"
+
+# Wait for index to be active
+echo "Waiting for index to be active..."
+while true; do
+  STATUS=$(aws qbusiness get-index --application-id "$APPLICATION_ID" --index-id "$INDEX_ID" --region "$AWS_REGION" --query 'status' --output text)
+  if [ "$STATUS" = "ACTIVE" ]; then
+    break
   fi
+  echo "Index status: $STATUS, waiting..."
+  sleep 15
+done
 
-  # Upload files from /docs folder to S3 bucket
-  echo "Uploading files from /docs to S3 bucket: $S3_BUCKET_NAME"
-  aws s3 sync "$(dirname "$0")/docs" "s3://$S3_BUCKET_NAME/" --region "$AWS_REGION"
-  echo "✓ Files uploaded to S3 bucket: $S3_BUCKET_NAME"
+# === PHASE 4: S3 Data Source Setup ===
+echo "=== PHASE 4: S3 Data Source Setup ==="
 
-  # Modify Q Business application setup to add S3 bucket as a data source
-  if [ "$APPLICATION_ID" = "create" ]; then
-    # Existing Q Business application creation logic...
+# Create S3 bucket and upload files from /docs folder
+S3_BUCKET_NAME="${PROJECT_NAME}-docs-bucket"
+echo "Checking for S3 bucket: $S3_BUCKET_NAME"
+if aws s3api head-bucket --bucket "$S3_BUCKET_NAME" 2>/dev/null; then
+  echo "✓ S3 bucket exists: $S3_BUCKET_NAME"
+else
+  echo "✱ Creating S3 bucket: $S3_BUCKET_NAME"
+  aws s3api create-bucket --bucket "$S3_BUCKET_NAME" --region "$AWS_REGION" --create-bucket-configuration LocationConstraint="$AWS_REGION"
+  echo "✓ S3 bucket created: $S3_BUCKET_NAME"
+fi
 
-    # Ensure the index is created before adding the S3 data source
-    if [ "$APPLICATION_ID" = "create" ]; then
-      echo "Creating Q Business index..."
-      INDEX_RESPONSE=$(aws qbusiness create-index \
-        --application-id "$APPLICATION_ID" \
-        --display-name "DisabilityRightsIndex" \
-        --type "STARTER" \
-        --region "$AWS_REGION" \
-        --output json)
+echo "Uploading files from /docs to S3 bucket: $S3_BUCKET_NAME"
+aws s3 sync "$(dirname "$0")/docs" "s3://$S3_BUCKET_NAME/" --region "$AWS_REGION"
+echo "✓ Files uploaded to S3 bucket: $S3_BUCKET_NAME"
 
-      INDEX_ID=$(echo "$INDEX_RESPONSE" | jq -r '.indexId')
-      echo "✓ Created Index: $INDEX_ID"
-
-      # Wait for index to be active
-      echo "Waiting for index to be active..."
-      while true; do
-        STATUS=$(aws qbusiness get-index --application-id "$APPLICATION_ID" --index-id "$INDEX_ID" --region "$AWS_REGION" --query 'status' --output text)
-        if [ "$STATUS" = "ACTIVE" ]; then
-          break
-        fi
-        echo "Index status: $STATUS, waiting..."
-        sleep 15
-      done
-
-      # Add S3 bucket as a data source
-      echo "Adding S3 bucket as a data source to Q Business application..."
-      S3_DATA_SOURCE_NAME="DisabilityRightsS3DataSource"
-
-      S3_DATA_SOURCE_CONFIG=$(cat <<EOF
+# Add S3 bucket as a data source
+echo "Adding S3 bucket as a data source to Q Business application..."
+S3_DATA_SOURCE_NAME="DisabilityRightsS3DataSource"
+S3_DATA_SOURCE_CONFIG=$(cat <<EOF
 {
   "type": "S3",
   "syncMode": "FULL_SYNC",
@@ -433,33 +347,32 @@ if [ "$APPLICATION_ID" = "create" ]; then
   "version": "1.0.0"
 }
 EOF
-      )
-
-      S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
-        --application-id "$APPLICATION_ID" \
-        --index-id "$INDEX_ID" \
-        --display-name "$S3_DATA_SOURCE_NAME" \
-        --configuration "$S3_DATA_SOURCE_CONFIG" \
-        --role-arn "$ROLE_ARN" \
-        --region "$AWS_REGION" \
-        --output json 2>&1)
-
-      if [ $? -eq 0 ]; then
-        S3_DATA_SOURCE_ID=$(echo "$S3_DATA_SOURCE_RESPONSE" | jq -r '.dataSourceId')
-        echo "✓ S3 data source added with ID: $S3_DATA_SOURCE_ID"
-      else
-        echo "✗ Failed to add S3 data source:" >&2
-        echo "$S3_DATA_SOURCE_RESPONSE" >&2
-        exit 1
-      fi
-
-      echo "📋 Q Business Setup Updated:"
-      echo "   Application ID: $APPLICATION_ID"
-      echo "   Index ID: $INDEX_ID"
-      echo "   S3 Data Source ID: $S3_DATA_SOURCE_ID"
-    fi
-  fi
+)
+S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
+  --application-id "$APPLICATION_ID" \
+  --index-id "$INDEX_ID" \
+  --display-name "$S3_DATA_SOURCE_NAME" \
+  --configuration "$S3_DATA_SOURCE_CONFIG" \
+  --role-arn "$ROLE_ARN" \
+  --region "$AWS_REGION" \
+  --output json 2>&1)
+if [ $? -eq 0 ]; then
+  S3_DATA_SOURCE_ID=$(echo "$S3_DATA_SOURCE_RESPONSE" | jq -r '.dataSourceId')
+  echo "✓ S3 data source added with ID: $S3_DATA_SOURCE_ID"
+else
+  echo "✗ Failed to add S3 data source:" >&2
+  echo "$S3_DATA_SOURCE_RESPONSE" >&2
+  exit 1
 fi
+
+echo "Triggering initial sync for S3 data source..."
+aws qbusiness start-data-source-sync-job \
+  --application-id "$APPLICATION_ID" \
+  --data-source-id "$S3_DATA_SOURCE_ID" \
+  --index-id "$INDEX_ID" \
+  --region "$AWS_REGION" || echo "Sync job may already be running for $S3_DATA_SOURCE_NAME"
+
+# === PHASE 5: CodeBuild Project Setup ===
 
 # Create CodeBuild project
 CODEBUILD_PROJECT_NAME="${PROJECT_NAME}-deploy"
