@@ -294,10 +294,17 @@ ENVIRONMENT='{
 
 ARTIFACTS='{"type":"NO_ARTIFACTS"}'
 
+# Get GitHub repository URL
+if [ -z "${GITHUB_URL:-}" ]; then
+  # Try to get the GitHub URL from git config
+  GITHUB_URL=$(git config --get remote.origin.url 2>/dev/null || echo "https://github.com/aws-samples/disability-rights-texas")
+  echo "Using GitHub URL: $GITHUB_URL"
+fi
+
 # Configure source for public GitHub repository
 SOURCE='{
   "type": "GITHUB",
-  "location": "https://github.com/aws-samples/disability-rights-texas",
+  "location": "'$GITHUB_URL'",
   "buildspec": "buildspec.yml",
   "gitCloneDepth": 1
 }'
