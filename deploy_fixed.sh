@@ -108,6 +108,22 @@ if [ -n "$EXISTING_APP_ID" ] && [ "$EXISTING_APP_ID" != "None" ]; then
   echo "✓ Found existing Q Business Application: $EXISTING_APP_ID"
   APPLICATION_ID="$EXISTING_APP_ID"
   
+  # Check if web experience is enabled in the application
+  APP_CONFIG=$(aws qbusiness get-application --application-id "$APPLICATION_ID" --region "$AWS_REGION" --output json 2>/dev/null)
+  WEB_EXPERIENCE_ENABLED=$(echo "$APP_CONFIG" | jq -r '.outcomeConfiguration.webExperienceConfiguration.webExperienceEnabled' 2>/dev/null)
+  
+  if [ "$WEB_EXPERIENCE_ENABLED" != "true" ]; then
+    echo "Updating application to enable web experience..."
+    aws qbusiness update-application \
+      --application-id "$APPLICATION_ID" \
+      --outcome-configuration '{"additionalResponsesConfiguration":{"includeDocumentTitle":true,"includeDocumentUri":true,"includeDocumentExcerpt":true},"webExperienceConfiguration":{"webExperienceEnabled":true}}' \
+      --region "$AWS_REGION" \
+      --output json > /dev/null
+    echo "✓ Web experience enabled for application"
+  else
+    echo "✓ Web experience already enabled for application"
+  fi
+  
   # Get existing index ID
   EXISTING_INDEX_ID=$(aws qbusiness list-indices --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'indices[?displayName==`DisabilityRightsIndex`].indexId' --output text)
   if [ -n "$EXISTING_INDEX_ID" ] && [ "$EXISTING_INDEX_ID" != "None" ]; then
@@ -115,11 +131,14 @@ if [ -n "$EXISTING_APP_ID" ] && [ "$EXISTING_APP_ID" != "None" ]; then
     INDEX_ID="$EXISTING_INDEX_ID"
   fi
 else
-  echo "Creating Q Business application..."
+  echo "Creating Q Business application with web experience enabled..."
+  
+  # Create application with web experience enabled in outcome configuration
   APP_RESPONSE=$(aws qbusiness create-application \
     --display-name "DisabilityRightsTexas" \
     --identity-type "ANONYMOUS" \
     --region "$AWS_REGION" \
+    --outcome-configuration '{"additionalResponsesConfiguration":{"includeDocumentTitle":true,"includeDocumentUri":true,"includeDocumentExcerpt":true},"webExperienceConfiguration":{"webExperienceEnabled":true}}' \
     --output json 2>&1)
   
   APPLICATION_ID=$(echo "$APP_RESPONSE" | jq -r '.applicationId')
@@ -171,9 +190,14 @@ if [ -n "$EXISTING_WEB_EXPERIENCE_ID" ] && [ "$EXISTING_WEB_EXPERIENCE_ID" != "N
   WEB_EXPERIENCE_ID="$EXISTING_WEB_EXPERIENCE_ID"
 else
   echo "Creating Web Experience..."
+  
+  # Create web experience with enhanced configuration
   WEB_EXPERIENCE_RESPONSE=$(aws qbusiness create-web-experience \
     --application-id "$APPLICATION_ID" \
     --display-name "DisabilityRightsWeb" \
+    --subtitle "Disability Rights Texas Knowledge Base" \
+    --welcome-message "Welcome to Disability Rights Texas. Ask me any questions about disability rights and services." \
+    --web-experience-configuration '{"title":"Disability Rights Texas Assistant","subtitle":"Ask me about disability rights and services","welcomeMessage":"Welcome! How can I help you today?","resultDisplayFields":["DOCUMENT_TITLE","DOCUMENT_URI","DOCUMENT_EXCERPT"]}' \
     --region "$AWS_REGION" \
     --output json 2>&1)
   
