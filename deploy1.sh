@@ -283,16 +283,23 @@ while true; do
   sleep 10
 done
 
-# Create index
-echo "Creating Q Business index..."
-INDEX_RESPONSE=$(aws qbusiness create-index \
-  --application-id "$APPLICATION_ID" \
-  --display-name "DisabilityRightsIndex" \
-  --type "STARTER" \
-  --region "$AWS_REGION" \
-  --output json)
-INDEX_ID=$(echo "$INDEX_RESPONSE" | jq -r '.indexId')
-echo "✓ Created Index: $INDEX_ID"
+# Check for existing index before creating a new one
+EXISTING_INDEX_ID=$(aws qbusiness list-indices --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'indices[?displayName==`DisabilityRightsIndex`].indexId' --output text)
+if [ -n "$EXISTING_INDEX_ID" ] && [ "$EXISTING_INDEX_ID" != "None" ]; then
+  echo "✓ Found existing Q Business Index: $EXISTING_INDEX_ID"
+  INDEX_ID="$EXISTING_INDEX_ID"
+else
+  # Create index
+  echo "Creating Q Business index..."
+  INDEX_RESPONSE=$(aws qbusiness create-index \
+    --application-id "$APPLICATION_ID" \
+    --display-name "DisabilityRightsIndex" \
+    --type "STARTER" \
+    --region "$AWS_REGION" \
+    --output json)
+  INDEX_ID=$(echo "$INDEX_RESPONSE" | jq -r '.indexId')
+  echo "✓ Created Index: $INDEX_ID"
+fi
 
 # Wait for index to be active
 echo "Waiting for index to be active..."
