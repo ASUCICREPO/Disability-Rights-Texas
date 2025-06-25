@@ -1,6 +1,43 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Helper function for retries with exponential backoff
+retry() {
+  local n=1
+  local max=${2:-5}
+  local delay=${3:-10}
+  while true; do
+    "$@" && break || {
+      if [[ $n -lt $max ]]; then
+        ((n++))
+        echo "Command failed. Attempt $n/$max. Retrying in $delay seconds..." >&2
+        sleep $((delay * n))
+      else
+        echo "Command failed after $n attempts." >&2
+        return 1
+      fi
+    }
+  done
+}
+
+# Increase IAM role propagation wait and check if role is assumable
+wait_for_role() {
+  local role_name="$1"
+  local max_attempts=10
+  local attempt=1
+  while [[ $attempt -le $max_attempts ]]; do
+    if aws iam get-role --role-name "$role_name" >/dev/null 2>&1; then
+      echo "✓ IAM role $role_name is assumable."
+      return 0
+    fi
+    echo "Waiting for IAM role $role_name to propagate... ($attempt/$max_attempts)"
+    sleep 10
+    ((attempt++))
+  done
+  echo "✗ IAM role $role_name is not assumable after waiting." >&2
+  return 1
+}
+
 # Disability Rights Texas - Automated Deployment Script
 # This script sets up and triggers a CodeBuild project for deployment
 
@@ -481,40 +518,3 @@ else
   echo "✗ Failed to start build."
   exit 1
 fi
-
-# Helper function for retries with exponential backoff
-retry() {
-  local n=1
-  local max=${2:-5}
-  local delay=${3:-10}
-  while true; do
-    "$@" && break || {
-      if [[ $n -lt $max ]]; then
-        ((n++))
-        echo "Command failed. Attempt $n/$max. Retrying in $delay seconds..." >&2
-        sleep $((delay * n))
-      else
-        echo "Command failed after $n attempts." >&2
-        return 1
-      fi
-    }
-  done
-}
-
-# Increase IAM role propagation wait and check if role is assumable
-wait_for_role() {
-  local role_name="$1"
-  local max_attempts=10
-  local attempt=1
-  while [[ $attempt -le $max_attempts ]]; do
-    if aws iam get-role --role-name "$role_name" >/dev/null 2>&1; then
-      echo "✓ IAM role $role_name is assumable."
-      return 0
-    fi
-    echo "Waiting for IAM role $role_name to propagate... ($attempt/$max_attempts)"
-    sleep 10
-    ((attempt++))
-  done
-  echo "✗ IAM role $role_name is not assumable after waiting." >&2
-  return 1
-}
