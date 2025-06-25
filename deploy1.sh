@@ -257,6 +257,7 @@ EOF
 if aws iam get-role --role-name "$ROLE_NAME" >/dev/null 2>&1; then
   echo "✓ IAM role exists"
   ROLE_ARN=$(aws iam get-role --role-name "$ROLE_NAME" --query 'Role.Arn' --output text)
+  # Update the policy with the specific permissions
   echo "Updating IAM policy..."
   aws iam put-role-policy \
     --role-name "$ROLE_NAME" \
