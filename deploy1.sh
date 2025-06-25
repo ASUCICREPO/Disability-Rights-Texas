@@ -275,21 +275,21 @@ else
   }'
   
   # Try to create the role, but handle the case where it already exists
-  if ROLE_ARN=$(aws iam create-role \
+  CREATE_OUTPUT=$(aws iam create-role \
     --role-name "$ROLE_NAME" \
     --assume-role-policy-document "$TRUST_DOC" \
-    --query 'Role.Arn' --output text 2>/dev/null); then
+    --query 'Role.Arn' --output text 2>&1)
+  
+  if echo "$CREATE_OUTPUT" | grep -q "EntityAlreadyExists"; then
+    echo "✓ IAM role already exists: $ROLE_NAME"
+    ROLE_ARN=$(aws iam get-role --role-name "$ROLE_NAME" --query 'Role.Arn' --output text)
+  elif echo "$CREATE_OUTPUT" | grep -q "arn:aws:iam"; then
     echo "✓ Created IAM role: $ROLE_NAME"
+    ROLE_ARN="$CREATE_OUTPUT"
   else
-    # Role might have been created between our check and create attempt
-    echo "Role creation failed, checking if it exists now..."
-    if aws iam get-role --role-name "$ROLE_NAME" >/dev/null 2>&1; then
-      echo "✓ IAM role exists: $ROLE_NAME"
-      ROLE_ARN=$(aws iam get-role --role-name "$ROLE_NAME" --query 'Role.Arn' --output text)
-    else
-      echo "✗ Failed to create or find IAM role: $ROLE_NAME"
-      exit 1
-    fi
+    echo "✗ Failed to create IAM role: $ROLE_NAME"
+    echo "Error: $CREATE_OUTPUT"
+    exit 1
   fi
   
   echo "Attaching custom policy..."
