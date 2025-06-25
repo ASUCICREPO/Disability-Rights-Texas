@@ -361,6 +361,10 @@ S3_DATA_SOURCE_CONFIG=$(cat <<EOF
 }
 EOF
 )
+
+echo "S3 Data Source Config:"
+echo "$S3_DATA_SOURCE_CONFIG"
+
 S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
   --application-id "$APPLICATION_ID" \
   --index-id "$INDEX_ID" \
@@ -369,6 +373,9 @@ S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
   --role-arn "$ROLE_ARN" \
   --region "$AWS_REGION" \
   --output json 2>&1)
+
+echo "AWS CLI Response: $S3_DATA_SOURCE_RESPONSE"
+
 if [ $? -eq 0 ]; then
   S3_DATA_SOURCE_ID=$(echo "$S3_DATA_SOURCE_RESPONSE" | jq -r '.dataSourceId')
   echo "✓ S3 data source added with ID: $S3_DATA_SOURCE_ID"
