@@ -256,11 +256,10 @@ fi
 # === PHASE 3: Q Business Application Setup ===
 echo "=== PHASE 3: Q Business Application Setup ==="
 
-# Create Q Business application with anonymous access and enable web experience
+# Create Q Business application with anonymous access
 APP_RESPONSE=$(aws qbusiness create-application \
   --display-name "DisabilityRightsTexas" \
   --identity-type "ANONYMOUS" \
-  --web-experience-url-enabled \
   --region "$AWS_REGION" \
   --output json)
 APPLICATION_ID=$(echo "$APP_RESPONSE" | jq -r '.applicationId')
