@@ -420,14 +420,83 @@ else
   exit 1
 fi
   
-  echo "📋 Q Business Setup Complete:"
-  echo "   Application ID: $APPLICATION_ID"
-  echo "   Index ID: $INDEX_ID"
-  echo "   Web Crawler Data Source ID: $WEB_DS_ID"
-  echo ""
-  echo "📝 Next Steps:"
-  echo "   1. Sync web crawler data source in Q Business console"
-  echo "   2. Configure web experience for anonymous access"
+  # Create S3 bucket and upload files from /docs folder
+  S3_BUCKET_NAME="${PROJECT_NAME}-docs-bucket"
+  echo "Checking for S3 bucket: $S3_BUCKET_NAME"
+
+  if aws s3api head-bucket --bucket "$S3_BUCKET_NAME" 2>/dev/null; then
+    echo "✓ S3 bucket exists: $S3_BUCKET_NAME"
+  else
+    echo "✱ Creating S3 bucket: $S3_BUCKET_NAME"
+    aws s3api create-bucket --bucket "$S3_BUCKET_NAME" --region "$AWS_REGION" --create-bucket-configuration LocationConstraint="$AWS_REGION"
+    echo "✓ S3 bucket created: $S3_BUCKET_NAME"
+  fi
+
+  # Upload files from /docs folder to S3 bucket
+  echo "Uploading files from /docs to S3 bucket: $S3_BUCKET_NAME"
+  aws s3 sync "$(dirname "$0")/docs" "s3://$S3_BUCKET_NAME/" --region "$AWS_REGION"
+  echo "✓ Files uploaded to S3 bucket: $S3_BUCKET_NAME"
+
+  # Modify Q Business application setup to add S3 bucket as a data source
+  if [ "$APPLICATION_ID" = "create" ]; then
+    # Existing Q Business application creation logic...
+
+    # Add S3 bucket as a data source
+    echo "Adding S3 bucket as a data source to Q Business application..."
+    S3_DATA_SOURCE_NAME="DisabilityRightsS3DataSource"
+
+    S3_DATA_SOURCE_CONFIG=$(cat <<EOF
+{
+  "type": "S3",
+  "syncMode": "FULL_SYNC",
+  "connectionConfiguration": {
+    "bucketName": "$S3_BUCKET_NAME",
+    "region": "$AWS_REGION"
+  },
+  "repositoryConfigurations": {
+    "s3": {
+      "fieldMappings": [
+        {
+          "indexFieldName": "FileName",
+          "indexFieldType": "STRING",
+          "dataSourceFieldName": "key"
+        },
+        {
+          "indexFieldName": "FileContent",
+          "indexFieldType": "STRING",
+          "dataSourceFieldName": "content"
+        }
+      ]
+    }
+  },
+  "version": "1.0.0"
+}
+EOF
+    )
+
+    S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
+      --application-id "$APPLICATION_ID" \
+      --index-id "$INDEX_ID" \
+      --display-name "$S3_DATA_SOURCE_NAME" \
+      --configuration "$S3_DATA_SOURCE_CONFIG" \
+      --role-arn "$ROLE_ARN" \
+      --region "$AWS_REGION" \
+      --output json 2>&1)
+
+    if [ $? -eq 0 ]; then
+      S3_DATA_SOURCE_ID=$(echo "$S3_DATA_SOURCE_RESPONSE" | jq -r '.dataSourceId')
+      echo "✓ S3 data source added with ID: $S3_DATA_SOURCE_ID"
+    else
+      echo "✗ Failed to add S3 data source:" >&2
+      echo "$S3_DATA_SOURCE_RESPONSE" >&2
+      exit 1
+    fi
+
+    echo "📋 Q Business Setup Updated:"
+    echo "   Application ID: $APPLICATION_ID"
+    echo "   Index ID: $INDEX_ID"
+    echo "   S3 Data Source ID: $S3_DATA_SOURCE_ID"
+  fi
 fi
 
 # Create CodeBuild project
