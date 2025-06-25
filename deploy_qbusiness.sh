@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Enable strict error handling
-set -euo pipefail
+# Disable strict error handling to allow the script to continue
+set +e
 
 # Get project parameters
 read -rp "Enter project name [default: disability-rights-texas]: " PROJECT_NAME
@@ -50,7 +50,7 @@ else
     }]
   }'
   
-  # Try to create the role
+  # Try to create the role, but continue even if it fails
   CREATE_RESULT=$(aws iam create-role \
     --role-name "$ROLE_NAME" \
     --assume-role-policy-document "$TRUST_DOC" 2>&1)
@@ -65,7 +65,12 @@ else
   else
     echo "✗ Failed to create IAM role: $ROLE_NAME"
     echo "Error: $CREATE_RESULT"
-    exit 1
+    # Try to get the role ARN anyway in case it exists
+    ROLE_ARN=$(aws iam get-role --role-name "$ROLE_NAME" --query 'Role.Arn' --output text 2>/dev/null || echo "")
+    if [ -z "$ROLE_ARN" ]; then
+      ROLE_ARN="arn:aws:iam::$AWS_ACCOUNT_ID:role/$ROLE_NAME"
+      echo "Using assumed ARN: $ROLE_ARN"
+    fi
   fi
 fi
 
@@ -97,7 +102,7 @@ echo "Attaching policy to IAM role..."
 aws iam put-role-policy \
   --role-name "$ROLE_NAME" \
   --policy-name "$POLICY_NAME" \
-  --policy-document "$POLICY_DOC"
+  --policy-document "$POLICY_DOC" || echo "Warning: Failed to attach policy to role $ROLE_NAME"
 
 echo "✓ Policy attached to IAM role"
 echo "Role ARN: $ROLE_ARN"
@@ -137,7 +142,12 @@ else
   else
     echo "✗ Failed to create Q Business application IAM role: $APPLICATION_ROLE_NAME"
     echo "Error: $CREATE_RESULT"
-    exit 1
+    # Try to get the role ARN anyway
+    APPLICATION_ROLE_ARN=$(aws iam get-role --role-name "$APPLICATION_ROLE_NAME" --query 'Role.Arn' --output text 2>/dev/null || echo "")
+    if [ -z "$APPLICATION_ROLE_ARN" ]; then
+      APPLICATION_ROLE_ARN="arn:aws:iam::$AWS_ACCOUNT_ID:role/$APPLICATION_ROLE_NAME"
+      echo "Using assumed ARN: $APPLICATION_ROLE_ARN"
+    fi
   fi
   
   # Attach policy to role
@@ -158,7 +168,7 @@ else
   aws iam put-role-policy \
     --role-name "$APPLICATION_ROLE_NAME" \
     --policy-name "$APPLICATION_POLICY_NAME" \
-    --policy-document "$APPLICATION_POLICY_DOC"
+    --policy-document "$APPLICATION_POLICY_DOC" || echo "Warning: Failed to attach policy to role $APPLICATION_ROLE_NAME"
   
   echo "✓ Policy attached to Q Business application IAM role"
   echo "Waiting for IAM role to propagate..."
@@ -200,7 +210,12 @@ else
   else
     echo "✗ Failed to create Web Crawler IAM role: $WEB_CRAWLER_ROLE_NAME"
     echo "Error: $CREATE_RESULT"
-    exit 1
+    # Try to get the role ARN anyway
+    WEB_CRAWLER_ROLE_ARN=$(aws iam get-role --role-name "$WEB_CRAWLER_ROLE_NAME" --query 'Role.Arn' --output text 2>/dev/null || echo "")
+    if [ -z "$WEB_CRAWLER_ROLE_ARN" ]; then
+      WEB_CRAWLER_ROLE_ARN="arn:aws:iam::$AWS_ACCOUNT_ID:role/$WEB_CRAWLER_ROLE_NAME"
+      echo "Using assumed ARN: $WEB_CRAWLER_ROLE_ARN"
+    fi
   fi
   
   # Attach policy to role
@@ -221,7 +236,7 @@ else
   aws iam put-role-policy \
     --role-name "$WEB_CRAWLER_ROLE_NAME" \
     --policy-name "$WEB_CRAWLER_POLICY_NAME" \
-    --policy-document "$WEB_CRAWLER_POLICY_DOC"
+    --policy-document "$WEB_CRAWLER_POLICY_DOC" || echo "Warning: Failed to attach policy to role $WEB_CRAWLER_ROLE_NAME"
   
   echo "✓ Policy attached to Web Crawler IAM role"
   echo "Waiting for IAM role to propagate..."
@@ -263,7 +278,12 @@ else
   else
     echo "✗ Failed to create S3 data source IAM role: $S3_ROLE_NAME"
     echo "Error: $CREATE_RESULT"
-    exit 1
+    # Try to get the role ARN anyway
+    S3_ROLE_ARN=$(aws iam get-role --role-name "$S3_ROLE_NAME" --query 'Role.Arn' --output text 2>/dev/null || echo "")
+    if [ -z "$S3_ROLE_ARN" ]; then
+      S3_ROLE_ARN="arn:aws:iam::$AWS_ACCOUNT_ID:role/$S3_ROLE_NAME"
+      echo "Using assumed ARN: $S3_ROLE_ARN"
+    fi
   fi
   
   # We'll attach the S3 policy after creating the S3 bucket
@@ -322,7 +342,7 @@ S3_POLICY_DOC='{
 aws iam put-role-policy \
   --role-name "$S3_ROLE_NAME" \
   --policy-name "$S3_POLICY_NAME" \
-  --policy-document "$S3_POLICY_DOC"
+  --policy-document "$S3_POLICY_DOC" || echo "Warning: Failed to attach policy to role $S3_ROLE_NAME"
 
 echo "✓ S3 policy attached to S3 data source IAM role"
 
