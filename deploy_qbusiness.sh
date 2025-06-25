@@ -53,7 +53,8 @@ else
   # Try to create the role, but continue even if it fails
   CREATE_RESULT=$(aws iam create-role \
     --role-name "$ROLE_NAME" \
-    --assume-role-policy-document "$TRUST_DOC" 2>&1)
+    --assume-role-policy-document "$TRUST_DOC" \
+    --output json 2>&1)
   
   # Check if role was created or already exists
   if echo "$CREATE_RESULT" | grep -q "EntityAlreadyExists"; then
@@ -61,7 +62,7 @@ else
     ROLE_ARN=$(aws iam get-role --role-name "$ROLE_NAME" --query 'Role.Arn' --output text)
   elif echo "$CREATE_RESULT" | grep -q "arn:aws:iam"; then
     echo "✓ Created IAM role: $ROLE_NAME"
-    ROLE_ARN=$(echo "$CREATE_RESULT" | grep -o 'arn:aws:iam::[0-9]*:role/[a-zA-Z0-9_-]*')
+    ROLE_ARN=$(echo "$CREATE_RESULT" | jq -r '.Role.Arn' 2>/dev/null || echo "$CREATE_RESULT" | grep -o 'arn:aws:iam::[0-9]*:role/[a-zA-Z0-9_-]*')
   else
     echo "✗ Failed to create IAM role: $ROLE_NAME"
     echo "Error: $CREATE_RESULT"
@@ -102,7 +103,8 @@ echo "Attaching policy to IAM role..."
 aws iam put-role-policy \
   --role-name "$ROLE_NAME" \
   --policy-name "$POLICY_NAME" \
-  --policy-document "$POLICY_DOC" || echo "Warning: Failed to attach policy to role $ROLE_NAME"
+  --policy-document "$POLICY_DOC" \
+  --output json || echo "Warning: Failed to attach policy to role $ROLE_NAME"
 
 echo "✓ Policy attached to IAM role"
 echo "Role ARN: $ROLE_ARN"
@@ -130,7 +132,8 @@ else
   # Try to create the role
   CREATE_RESULT=$(aws iam create-role \
     --role-name "$APPLICATION_ROLE_NAME" \
-    --assume-role-policy-document "$TRUST_DOC" 2>&1)
+    --assume-role-policy-document "$TRUST_DOC" \
+    --output json 2>&1)
   
   # Check if role was created or already exists
   if echo "$CREATE_RESULT" | grep -q "EntityAlreadyExists"; then
@@ -168,7 +171,8 @@ else
   aws iam put-role-policy \
     --role-name "$APPLICATION_ROLE_NAME" \
     --policy-name "$APPLICATION_POLICY_NAME" \
-    --policy-document "$APPLICATION_POLICY_DOC" || echo "Warning: Failed to attach policy to role $APPLICATION_ROLE_NAME"
+    --policy-document "$APPLICATION_POLICY_DOC" \
+    --output json || echo "Warning: Failed to attach policy to role $APPLICATION_ROLE_NAME"
   
   echo "✓ Policy attached to Q Business application IAM role"
   echo "Waiting for IAM role to propagate..."
@@ -198,7 +202,8 @@ else
   # Try to create the role
   CREATE_RESULT=$(aws iam create-role \
     --role-name "$WEB_CRAWLER_ROLE_NAME" \
-    --assume-role-policy-document "$TRUST_DOC" 2>&1)
+    --assume-role-policy-document "$TRUST_DOC" \
+    --output json 2>&1)
   
   # Check if role was created or already exists
   if echo "$CREATE_RESULT" | grep -q "EntityAlreadyExists"; then
@@ -236,7 +241,8 @@ else
   aws iam put-role-policy \
     --role-name "$WEB_CRAWLER_ROLE_NAME" \
     --policy-name "$WEB_CRAWLER_POLICY_NAME" \
-    --policy-document "$WEB_CRAWLER_POLICY_DOC" || echo "Warning: Failed to attach policy to role $WEB_CRAWLER_ROLE_NAME"
+    --policy-document "$WEB_CRAWLER_POLICY_DOC" \
+    --output json || echo "Warning: Failed to attach policy to role $WEB_CRAWLER_ROLE_NAME"
   
   echo "✓ Policy attached to Web Crawler IAM role"
   echo "Waiting for IAM role to propagate..."
@@ -266,7 +272,8 @@ else
   # Try to create the role
   CREATE_RESULT=$(aws iam create-role \
     --role-name "$S3_ROLE_NAME" \
-    --assume-role-policy-document "$TRUST_DOC" 2>&1)
+    --assume-role-policy-document "$TRUST_DOC" \
+    --output json 2>&1)
   
   # Check if role was created or already exists
   if echo "$CREATE_RESULT" | grep -q "EntityAlreadyExists"; then
@@ -342,105 +349,127 @@ S3_POLICY_DOC='{
 aws iam put-role-policy \
   --role-name "$S3_ROLE_NAME" \
   --policy-name "$S3_POLICY_NAME" \
-  --policy-document "$S3_POLICY_DOC" || echo "Warning: Failed to attach policy to role $S3_ROLE_NAME"
+  --policy-document "$S3_POLICY_DOC" \
+  --output json || echo "Warning: Failed to attach policy to role $S3_ROLE_NAME"
 
 echo "✓ S3 policy attached to S3 data source IAM role"
 
 # === PHASE 3: Q Business Application Setup ===
 echo "=== PHASE 3: Q Business Application Setup ==="
 
-# Check for existing Q Business application
-EXISTING_APP_ID=$(aws qbusiness list-applications --region "$AWS_REGION" --query 'applications[?displayName==`'${PROJECT_NAME}-app'`].applicationId' --output text)
-if [ -n "$EXISTING_APP_ID" ] && [ "$EXISTING_APP_ID" != "None" ]; then
-  echo "✓ Found existing Q Business Application: $EXISTING_APP_ID"
-  APPLICATION_ID="$EXISTING_APP_ID"
-  
-  # Get existing index ID
-  EXISTING_INDEX_ID=$(aws qbusiness list-indices --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'indices[?displayName==`'${PROJECT_NAME}-index'`].indexId' --output text)
-  if [ -n "$EXISTING_INDEX_ID" ] && [ "$EXISTING_INDEX_ID" != "None" ]; then
-    echo "✓ Found existing Index: $EXISTING_INDEX_ID"
-    INDEX_ID="$EXISTING_INDEX_ID"
-  fi
-else
+# Create a simple script to create just the Q Business application
+cat > create_qbusiness_app.sh << 'EOF'
+#!/bin/bash
+set +e
+
+APPLICATION_ID=$1
+AWS_REGION=$2
+
+if [ -z "$APPLICATION_ID" ]; then
   echo "Creating Q Business application..."
-  
-  # Create the application
   APP_RESPONSE=$(aws qbusiness create-application \
-    --display-name "${PROJECT_NAME}-app" \
-    --description "Disability Rights Texas AI Assistant Q Business Application" \
-    --role-arn "$APPLICATION_ROLE_ARN" \
+    --display-name "DisabilityRightsTexas" \
     --identity-type "ANONYMOUS" \
     --region "$AWS_REGION" \
     --output json 2>&1)
   
   APPLICATION_ID=$(echo "$APP_RESPONSE" | jq -r '.applicationId')
-  echo "✓ Created Q Business Application: $APPLICATION_ID"
-  
-  echo "Waiting for application to be active..."
-  while true; do
-    STATUS=$(aws qbusiness get-application --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'status' --output text)
-    if [ "$STATUS" = "ACTIVE" ]; then
-      echo "Application is ACTIVE. Waiting extra 10 seconds for full readiness..."
-      sleep 10
-      break
-    fi
-    echo "Status: $STATUS, waiting..."
-    sleep 10
-  done
+  echo "Created Q Business Application: $APPLICATION_ID"
 fi
 
-# Create index if needed
-if [ -z "${INDEX_ID:-}" ]; then
+echo $APPLICATION_ID
+EOF
+
+chmod +x create_qbusiness_app.sh
+
+# Check for existing Q Business application
+EXISTING_APP_ID=$(aws qbusiness list-applications --region "$AWS_REGION" --query 'applications[?displayName==`DisabilityRightsTexas`].applicationId' --output text 2>/dev/null || echo "")
+if [ -n "$EXISTING_APP_ID" ] && [ "$EXISTING_APP_ID" != "None" ]; then
+  echo "✓ Found existing Q Business Application: $EXISTING_APP_ID"
+  APPLICATION_ID="$EXISTING_APP_ID"
+else
+  # Use the simple script to create the application
+  APPLICATION_ID=$(./create_qbusiness_app.sh "" "$AWS_REGION")
+  echo "✓ Created Q Business Application: $APPLICATION_ID"
+fi
+
+# Get existing index ID
+EXISTING_INDEX_ID=$(aws qbusiness list-indices --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'indices[?displayName==`DisabilityRightsIndex`].indexId' --output text 2>/dev/null || echo "")
+if [ -n "$EXISTING_INDEX_ID" ] && [ "$EXISTING_INDEX_ID" != "None" ]; then
+  echo "✓ Found existing Index: $EXISTING_INDEX_ID"
+  INDEX_ID="$EXISTING_INDEX_ID"
+fi
+
+# Create a simple script to create the index
+cat > create_index.sh << 'EOF'
+#!/bin/bash
+set +e
+
+APPLICATION_ID=$1
+INDEX_ID=$2
+AWS_REGION=$3
+
+if [ -z "$INDEX_ID" ]; then
   echo "Creating Q Business index..."
   INDEX_RESPONSE=$(aws qbusiness create-index \
     --application-id "$APPLICATION_ID" \
-    --display-name "${PROJECT_NAME}-index" \
+    --display-name "DisabilityRightsIndex" \
     --type "STARTER" \
     --region "$AWS_REGION" \
-    --output json)
+    --output json 2>/dev/null)
   
   INDEX_ID=$(echo "$INDEX_RESPONSE" | jq -r '.indexId')
-  echo "✓ Created Index: $INDEX_ID"
-  
-  echo "Waiting for index to be active..."
-  while true; do
-    STATUS=$(aws qbusiness get-index --application-id "$APPLICATION_ID" --index-id "$INDEX_ID" --region "$AWS_REGION" --query 'status' --output text)
-    if [ "$STATUS" = "ACTIVE" ]; then
-      echo "Index is ACTIVE. Waiting extra 10 seconds for full readiness..."
-      sleep 10
-      break
-    fi
-    echo "Index status: $STATUS, waiting..."
-    sleep 15
-  done
+  echo "Created Index: $INDEX_ID"
 fi
 
-# Create retriever if needed
-EXISTING_RETRIEVER_ID=$(aws qbusiness list-retrievers --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'retrievers[?type==`AMAZON_Q_BUSINESS`].retrieverId | [0]' --output text)
+echo $INDEX_ID
+EOF
+
+chmod +x create_index.sh
+
+# Create index if needed
+if [ -z "${INDEX_ID:-}" ]; then
+  INDEX_ID=$(./create_index.sh "$APPLICATION_ID" "" "$AWS_REGION")
+  echo "✓ Created Index: $INDEX_ID"
+fi
+
+# Create a simple script to create the retriever
+cat > create_retriever.sh << 'EOF'
+#!/bin/bash
+set +e
+
+APPLICATION_ID=$1
+INDEX_ID=$2
+AWS_REGION=$3
+
+# Check for existing retriever
+EXISTING_RETRIEVER_ID=$(aws qbusiness list-retrievers --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'retrievers[?type==`AMAZON_Q_BUSINESS`].retrieverId | [0]' --output text 2>/dev/null || echo "")
 if [ -n "$EXISTING_RETRIEVER_ID" ] && [ "$EXISTING_RETRIEVER_ID" != "None" ]; then
-  echo "✓ Found existing Retriever: $EXISTING_RETRIEVER_ID"
+  echo "Found existing Retriever: $EXISTING_RETRIEVER_ID"
   RETRIEVER_ID="$EXISTING_RETRIEVER_ID"
 else
   echo "Creating Q Business retriever..."
-  RETRIEVER_CONFIG='{
-    "nativeIndexConfiguration": {
-      "indexId": "'$INDEX_ID'"
-    }
-  }'
+  RETRIEVER_CONFIG='{"nativeIndexConfiguration":{"indexId":"'$INDEX_ID'"}'
   
   RETRIEVER_RESPONSE=$(aws qbusiness create-retriever \
     --application-id "$APPLICATION_ID" \
     --type "AMAZON_Q_BUSINESS" \
     --configuration "$RETRIEVER_CONFIG" \
     --region "$AWS_REGION" \
-    --output json)
+    --output json 2>/dev/null)
   
   RETRIEVER_ID=$(echo "$RETRIEVER_RESPONSE" | jq -r '.retrieverId')
-  echo "✓ Created Retriever: $RETRIEVER_ID"
-  
-  echo "Waiting for retriever to be active..."
-  sleep 10
+  echo "Created Retriever: $RETRIEVER_ID"
 fi
+
+echo $RETRIEVER_ID
+EOF
+
+chmod +x create_retriever.sh
+
+# Create retriever if needed
+RETRIEVER_ID=$(./create_retriever.sh "$APPLICATION_ID" "$INDEX_ID" "$AWS_REGION")
+echo "✓ Using Retriever: $RETRIEVER_ID"
 
 # === PHASE 4: Web Experience Setup ===
 echo "=== PHASE 4: Web Experience Setup ==="
