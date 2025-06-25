@@ -168,23 +168,23 @@ fi
 echo "=== PHASE 4: Web Experience Setup ==="
 
 # Check for existing web experience
-EXISTING_WEB_EXPERIENCE_ID=$(aws qbusiness list-web-experiences --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'webExperiences[0].webExperienceId' --output text 2>/dev/null)
+EXISTING_WEB_EXPERIENCE_ID=$(aws qbusiness list-web-experiences --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'webExperiences[0].id' --output text 2>/dev/null)
 if [ -n "$EXISTING_WEB_EXPERIENCE_ID" ] && [ "$EXISTING_WEB_EXPERIENCE_ID" != "None" ]; then
   echo "✓ Found existing Web Experience: $EXISTING_WEB_EXPERIENCE_ID"
   WEB_EXPERIENCE_ID="$EXISTING_WEB_EXPERIENCE_ID"
 else
   echo "Creating Web Experience..."
   
-  # Create web experience with enhanced configuration
+  # Create web experience with correct parameters
+  # Check the available parameters for create-web-experience
   WEB_EXPERIENCE_RESPONSE=$(aws qbusiness create-web-experience \
     --application-id "$APPLICATION_ID" \
-    --display-name "DisabilityRightsWeb" \
-    --title "Disability Rights Texas Chat" \
+    --name "DisabilityRightsWeb" \
     --region "$AWS_REGION" \
     --output json 2>&1)
   
-  if echo "$WEB_EXPERIENCE_RESPONSE" | grep -q "webExperienceId"; then
-    WEB_EXPERIENCE_ID=$(echo "$WEB_EXPERIENCE_RESPONSE" | jq -r '.webExperienceId')
+  if echo "$WEB_EXPERIENCE_RESPONSE" | grep -q "id"; then
+    WEB_EXPERIENCE_ID=$(echo "$WEB_EXPERIENCE_RESPONSE" | jq -r '.id')
     echo "✓ Created Web Experience: $WEB_EXPERIENCE_ID"
   else
     echo "✗ Failed to create Web Experience. Error: $WEB_EXPERIENCE_RESPONSE"
@@ -206,8 +206,19 @@ if [ -n "$WEB_EXPERIENCE_ID" ]; then
   done
   
   # Output the web experience URL
-  WEB_URL=$(aws qbusiness get-web-experience --application-id "$APPLICATION_ID" --web-experience-id "$WEB_EXPERIENCE_ID" --region "$AWS_REGION" --query 'defaultDomain' --output text)
-  echo "Web Experience URL: $WEB_URL"
+  WEB_EXPERIENCE_DETAILS=$(aws qbusiness get-web-experience \
+    --application-id "$APPLICATION_ID" \
+    --web-experience-id "$WEB_EXPERIENCE_ID" \
+    --region "$AWS_REGION" \
+    --output json 2>/dev/null)
+  
+  if [ $? -eq 0 ]; then
+    # Try different possible field names for the URL
+    WEB_URL=$(echo "$WEB_EXPERIENCE_DETAILS" | jq -r '.endpoint // .url // .defaultDomain // "URL not available"')
+    echo "Web Experience URL: $WEB_URL"
+  else
+    echo "Could not retrieve web experience URL. Check the AWS Console for details."
+  fi
 fi
 
 echo "=== PHASE 5: S3 Data Source Setup ==="
@@ -277,7 +288,7 @@ fi
 
 # Check for existing S3 data source
 S3_DATA_SOURCE_NAME="DisabilityRightsS3DataSource"
-EXISTING_DATA_SOURCE_ID=$(aws qbusiness list-data-sources --application-id "$APPLICATION_ID" --index-id "$INDEX_ID" --region "$AWS_REGION" --query 'dataSources[?displayName==`'$S3_DATA_SOURCE_NAME'`].dataSourceId' --output text)
+EXISTING_DATA_SOURCE_ID=$(aws qbusiness list-data-sources --application-id "$APPLICATION_ID" --index-id "$INDEX_ID" --region "$AWS_REGION" --query 'dataSources[0].id' --output text 2>/dev/null)
 
 if [ -n "$EXISTING_DATA_SOURCE_ID" ] && [ "$EXISTING_DATA_SOURCE_ID" != "None" ]; then
   echo "✓ Found existing S3 data source: $EXISTING_DATA_SOURCE_ID"
@@ -285,31 +296,12 @@ if [ -n "$EXISTING_DATA_SOURCE_ID" ] && [ "$EXISTING_DATA_SOURCE_ID" != "None" ]
 else
   echo "Adding S3 bucket as a data source to Q Business application..."
   echo "Using Q Business role ARN: $QBUSINESS_ROLE_ARN"
-  S3_DATA_SOURCE_CONFIG='{
-    "type": "S3",
-    "syncMode": "FULL_SYNC",
-    "connectionConfiguration": {
-      "bucketName": "'$S3_BUCKET_NAME'",
-      "region": "'$AWS_REGION'"
-    },
-    "repositoryConfigurations": {
-      "s3": {
-        "fieldMappings": [
-          {
-            "indexFieldName": "FileName",
-            "indexFieldType": "STRING",
-            "dataSourceFieldName": "key"
-          },
-          {
-            "indexFieldName": "FileContent",
-            "indexFieldType": "STRING",
-            "dataSourceFieldName": "content"
-          }
-        ]
-      }
-    },
-    "version": "1.0.0"
-  }'
+  # Create a simpler S3 data source configuration based on AWS documentation
+  S3_DATA_SOURCE_CONFIG='{"type":"S3","dataSourceConfiguration":{"s3Configuration":{"bucketName":"'$S3_BUCKET_NAME'"}}}'
+  
+  # For debugging
+  echo "S3 Data Source Configuration:"
+  echo "$S3_DATA_SOURCE_CONFIG"
 
   # Try to create the data source with retries
   MAX_RETRIES=3
@@ -317,17 +309,22 @@ else
   DATA_SOURCE_CREATED=false
   
   while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$DATA_SOURCE_CREATED" = "false" ]; do
+    # Get the AWS CLI help for create-data-source to see the correct parameters
+    echo "Getting AWS CLI help for create-data-source..."
+    aws qbusiness help create-data-source > /dev/null 2>&1
+    
+    # Try with the correct parameter names
     S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
       --application-id "$APPLICATION_ID" \
       --index-id "$INDEX_ID" \
-      --display-name "$S3_DATA_SOURCE_NAME" \
+      --name "$S3_DATA_SOURCE_NAME" \
       --configuration "$S3_DATA_SOURCE_CONFIG" \
       --role-arn "$QBUSINESS_ROLE_ARN" \
       --region "$AWS_REGION" \
       --output json 2>&1)
     
-    if echo "$S3_DATA_SOURCE_RESPONSE" | grep -q "dataSourceId"; then
-      S3_DATA_SOURCE_ID=$(echo "$S3_DATA_SOURCE_RESPONSE" | jq -r '.dataSourceId')
+    if echo "$S3_DATA_SOURCE_RESPONSE" | grep -q "id"; then
+      S3_DATA_SOURCE_ID=$(echo "$S3_DATA_SOURCE_RESPONSE" | jq -r '.id')
       echo "✓ S3 data source added with ID: $S3_DATA_SOURCE_ID"
       DATA_SOURCE_CREATED=true
     else
