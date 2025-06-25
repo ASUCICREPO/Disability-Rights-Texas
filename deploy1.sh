@@ -264,54 +264,64 @@ if [ -n "$EXISTING_APP_ID" ] && [ "$EXISTING_APP_ID" != "None" ]; then
   APPLICATION_ID="$EXISTING_APP_ID"
 else
   # Create Q Business application with anonymous access
-  APP_RESPONSE=$(aws qbusiness create-application \
+  APP_RESPONSE=""
+  retry 5 10 bash -c 'APP_RESPONSE=$(aws qbusiness create-application \
     --display-name "DisabilityRightsTexas" \
     --identity-type "ANONYMOUS" \
     --region "$AWS_REGION" \
-    --output json)
+    --output json)'
+  if [ -z "$APP_RESPONSE" ]; then
+    echo "✗ Failed to create Q Business application." >&2
+    exit 1
+  fi
   APPLICATION_ID=$(echo "$APP_RESPONSE" | jq -r '.applicationId')
   echo "✓ Created Q Business Application: $APPLICATION_ID"
-fi
 
-# Wait for application to be active
-echo "Waiting for application to be active..."
-while true; do
-  STATUS=$(aws qbusiness get-application --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'status' --output text)
-  if [ "$STATUS" = "ACTIVE" ]; then
-    break
-  fi
-  echo "Application status: $STATUS, waiting..."
-  sleep 10
-done
+  # Wait for application to be active, then wait extra 30 seconds
+  echo "Waiting for application to be active..."
+  while true; do
+    STATUS=$(aws qbusiness get-application --application-id $APPLICATION_ID --region $AWS_REGION --query 'status' --output text)
+    if [ "$STATUS" = "ACTIVE" ]; then
+      echo "Application is ACTIVE. Waiting extra 30 seconds for full readiness..."
+      sleep 30
+      break
+    fi
+    echo "Status: $STATUS, waiting..."
+    sleep 10
+  done
 
-# Check for existing index before creating a new one
-EXISTING_INDEX_ID=$(aws qbusiness list-indices --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'indices[?displayName==`DisabilityRightsIndex`].indexId' --output text)
-if [ -n "$EXISTING_INDEX_ID" ] && [ "$EXISTING_INDEX_ID" != "None" ]; then
-  echo "✓ Found existing Q Business Index: $EXISTING_INDEX_ID"
-  INDEX_ID="$EXISTING_INDEX_ID"
-else
-  # Create starter index
-  echo "Creating Q Business starter index..."
-  INDEX_RESPONSE=$(aws qbusiness create-index \
-    --application-id "$APPLICATION_ID" \
+  # Create index with retries
+  echo "Creating Q Business index..."
+  INDEX_RESPONSE=""
+  retry 5 10 bash -c 'INDEX_RESPONSE=$(aws qbusiness create-index \
+    --application-id $APPLICATION_ID \
     --display-name "DisabilityRightsIndex" \
     --type "STARTER" \
-    --region "$AWS_REGION" \
-    --output json)
-  INDEX_ID=$(echo "$INDEX_RESPONSE" | jq -r '.indexId')
-  echo "✓ Created Starter Index: $INDEX_ID"
-fi
-
-# Wait for index to be active
-echo "Waiting for index to be active..."
-while true; do
-  STATUS=$(aws qbusiness get-index --application-id "$APPLICATION_ID" --index-id "$INDEX_ID" --region "$AWS_REGION" --query 'status' --output text)
-  if [ "$STATUS" = "ACTIVE" ]; then
-    break
+    --region $AWS_REGION \
+    --output json)'
+  if [ -z "$INDEX_RESPONSE" ]; then
+    echo "✗ Failed to create Q Business index." >&2
+    exit 1
   fi
-  echo "Index status: $STATUS, waiting..."
-  sleep 15
-done
+  INDEX_ID=$(echo "$INDEX_RESPONSE" | jq -r '.indexId')
+  echo "✓ Created Index: $INDEX_ID"
+
+  # Wait for index to be active, then wait extra 30 seconds
+  echo "Waiting for index to be active..."
+  while true; do
+    STATUS=$(aws qbusiness get-index --application-id $APPLICATION_ID --index-id $INDEX_ID --region $AWS_REGION --query 'status' --output text)
+    if [ "$STATUS" = "ACTIVE" ]; then
+      echo "Index is ACTIVE. Waiting extra 30 seconds for full readiness..."
+      sleep 30
+      break
+    fi
+    echo "Index status: $STATUS, waiting..."
+    sleep 15
+  done
+
+  # After creating/updating QBUSINESS_ROLE_NAME, wait for propagation
+  wait_for_role "$QBUSINESS_ROLE_NAME"
+fi
 
 # === PHASE 4: S3 Data Source Setup ===
 echo "=== PHASE 4: S3 Data Source Setup ==="
@@ -331,7 +341,7 @@ echo "Uploading files from /docs to S3 bucket: $S3_BUCKET_NAME"
 aws s3 sync "$(dirname "$0")/docs" "s3://$S3_BUCKET_NAME/" --region "$AWS_REGION"
 echo "✓ Files uploaded to S3 bucket: $S3_BUCKET_NAME"
 
-# Add S3 bucket as a data source
+# Add S3 bucket as a data source to Q Business application with retries
 echo "Adding S3 bucket as a data source to Q Business application..."
 S3_DATA_SOURCE_NAME="DisabilityRightsS3DataSource"
 S3_DATA_SOURCE_CONFIG=$(cat <<EOF
@@ -363,35 +373,28 @@ S3_DATA_SOURCE_CONFIG=$(cat <<EOF
 EOF
 )
 
-echo "S3 Data Source Config:"
-echo "$S3_DATA_SOURCE_CONFIG"
-
-S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
+S3_DATA_SOURCE_RESPONSE=""
+retry 5 10 bash -c 'S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
   --application-id "$APPLICATION_ID" \
   --index-id "$INDEX_ID" \
   --display-name "$S3_DATA_SOURCE_NAME" \
   --configuration "$S3_DATA_SOURCE_CONFIG" \
   --role-arn "$ROLE_ARN" \
   --region "$AWS_REGION" \
-  --output json 2>&1)
-
-echo "AWS CLI Response: $S3_DATA_SOURCE_RESPONSE"
-
-if [ $? -eq 0 ]; then
+  --output json 2>&1)'
+if [ $? -eq 0 ] && [ -n "$S3_DATA_SOURCE_RESPONSE" ]; then
   S3_DATA_SOURCE_ID=$(echo "$S3_DATA_SOURCE_RESPONSE" | jq -r '.dataSourceId')
   echo "✓ S3 data source added with ID: $S3_DATA_SOURCE_ID"
 else
-  echo "✗ Failed to add S3 data source:" >&2
+  echo "✗ Failed to add S3 data source after retries. Full response:" >&2
   echo "$S3_DATA_SOURCE_RESPONSE" >&2
   exit 1
 fi
 
-echo "Triggering initial sync for S3 data source..."
-aws qbusiness start-data-source-sync-job \
-  --application-id "$APPLICATION_ID" \
-  --data-source-id "$S3_DATA_SOURCE_ID" \
-  --index-id "$INDEX_ID" \
-  --region "$AWS_REGION" || echo "Sync job may already be running for $S3_DATA_SOURCE_NAME"
+echo "📋 Q Business Setup Updated:"
+echo "   Application ID: $APPLICATION_ID"
+echo "   Index ID: $INDEX_ID"
+echo "   S3 Data Source ID: $S3_DATA_SOURCE_ID"
 
 # === PHASE 5: CodeBuild Project Setup ===
 
@@ -478,3 +481,40 @@ else
   echo "✗ Failed to start build."
   exit 1
 fi
+
+# Helper function for retries with exponential backoff
+retry() {
+  local n=1
+  local max=${2:-5}
+  local delay=${3:-10}
+  while true; do
+    "$@" && break || {
+      if [[ $n -lt $max ]]; then
+        ((n++))
+        echo "Command failed. Attempt $n/$max. Retrying in $delay seconds..." >&2
+        sleep $((delay * n))
+      else
+        echo "Command failed after $n attempts." >&2
+        return 1
+      fi
+    }
+  done
+}
+
+# Increase IAM role propagation wait and check if role is assumable
+wait_for_role() {
+  local role_name="$1"
+  local max_attempts=10
+  local attempt=1
+  while [[ $attempt -le $max_attempts ]]; do
+    if aws iam get-role --role-name "$role_name" >/dev/null 2>&1; then
+      echo "✓ IAM role $role_name is assumable."
+      return 0
+    fi
+    echo "Waiting for IAM role $role_name to propagate... ($attempt/$max_attempts)"
+    sleep 10
+    ((attempt++))
+  done
+  echo "✗ IAM role $role_name is not assumable after waiting." >&2
+  return 1
+}
