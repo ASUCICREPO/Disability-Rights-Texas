@@ -301,12 +301,13 @@ if [ -n "$EXISTING_APP_ID" ] && [ "$EXISTING_APP_ID" != "None" ]; then
   APPLICATION_ID="$EXISTING_APP_ID"
 else
   # Create Q Business application with anonymous access
+  echo "Creating Q Business application..."
   APP_RESPONSE=""
-  retry 5 10 bash -c 'APP_RESPONSE=$(aws qbusiness create-application \
+  retry bash -c 'APP_RESPONSE=$(aws qbusiness create-application \
     --display-name "DisabilityRightsTexas" \
     --identity-type "ANONYMOUS" \
-    --region "$AWS_REGION" \
-    --output json)'
+    --region $AWS_REGION \
+    --output json)' 5 10
   if [ -z "$APP_RESPONSE" ]; then
     echo "✗ Failed to create Q Business application." >&2
     exit 1
@@ -330,12 +331,12 @@ else
   # Create index with retries
   echo "Creating Q Business index..."
   INDEX_RESPONSE=""
-  retry 5 10 bash -c 'INDEX_RESPONSE=$(aws qbusiness create-index \
+  retry bash -c 'INDEX_RESPONSE=$(aws qbusiness create-index \
     --application-id $APPLICATION_ID \
     --display-name "DisabilityRightsIndex" \
     --type "STARTER" \
     --region $AWS_REGION \
-    --output json)'
+    --output json)' 5 10
   if [ -z "$INDEX_RESPONSE" ]; then
     echo "✗ Failed to create Q Business index." >&2
     exit 1
@@ -411,14 +412,14 @@ EOF
 )
 
 S3_DATA_SOURCE_RESPONSE=""
-retry 5 10 bash -c 'S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
+retry bash -c 'S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
   --application-id "$APPLICATION_ID" \
   --index-id "$INDEX_ID" \
   --display-name "$S3_DATA_SOURCE_NAME" \
   --configuration "$S3_DATA_SOURCE_CONFIG" \
   --role-arn "$ROLE_ARN" \
   --region "$AWS_REGION" \
-  --output json 2>&1)'
+  --output json 2>&1)' 5 10
 if [ $? -eq 0 ] && [ -n "$S3_DATA_SOURCE_RESPONSE" ]; then
   S3_DATA_SOURCE_ID=$(echo "$S3_DATA_SOURCE_RESPONSE" | jq -r '.dataSourceId')
   echo "✓ S3 data source added with ID: $S3_DATA_SOURCE_ID"
