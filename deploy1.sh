@@ -255,7 +255,7 @@ EOF
 )
 
 if aws iam get-role --role-name "$ROLE_NAME" >/dev/null 2>&1; then
-  echo "✓ IAM role exists"
+  echo "✓ IAM role exists: $ROLE_NAME"
   ROLE_ARN=$(aws iam get-role --role-name "$ROLE_NAME" --query 'Role.Arn' --output text)
   # Update the policy with the specific permissions
   echo "Updating IAM policy..."
@@ -273,10 +273,25 @@ else
       "Action":"sts:AssumeRole"
     }]
   }'
-  ROLE_ARN=$(aws iam create-role \
+  
+  # Try to create the role, but handle the case where it already exists
+  if ROLE_ARN=$(aws iam create-role \
     --role-name "$ROLE_NAME" \
     --assume-role-policy-document "$TRUST_DOC" \
-    --query 'Role.Arn' --output text)
+    --query 'Role.Arn' --output text 2>/dev/null); then
+    echo "✓ Created IAM role: $ROLE_NAME"
+  else
+    # Role might have been created between our check and create attempt
+    echo "Role creation failed, checking if it exists now..."
+    if aws iam get-role --role-name "$ROLE_NAME" >/dev/null 2>&1; then
+      echo "✓ IAM role exists: $ROLE_NAME"
+      ROLE_ARN=$(aws iam get-role --role-name "$ROLE_NAME" --query 'Role.Arn' --output text)
+    else
+      echo "✗ Failed to create or find IAM role: $ROLE_NAME"
+      exit 1
+    fi
+  fi
+  
   echo "Attaching custom policy..."
   aws iam put-role-policy \
     --role-name "$ROLE_NAME" \
@@ -295,6 +310,15 @@ EXISTING_APP_ID=$(aws qbusiness list-applications --region "$AWS_REGION" --query
 if [ -n "$EXISTING_APP_ID" ] && [ "$EXISTING_APP_ID" != "None" ]; then
   echo "✓ Found existing Q Business Application: $EXISTING_APP_ID"
   APPLICATION_ID="$EXISTING_APP_ID"
+  
+  # Get the existing index ID
+  EXISTING_INDEX_ID=$(aws qbusiness list-indices --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'indices[?displayName==`DisabilityRightsIndex`].indexId' --output text)
+  if [ -n "$EXISTING_INDEX_ID" ] && [ "$EXISTING_INDEX_ID" != "None" ]; then
+    echo "✓ Found existing Index: $EXISTING_INDEX_ID"
+    INDEX_ID="$EXISTING_INDEX_ID"
+  else
+    echo "No existing index found, will create new one"
+  fi
 else
   # Create Q Business application with anonymous access
   echo "Creating Q Business application..."
@@ -354,8 +378,39 @@ else
     sleep 15
   done
 
-  # After creating/updating QBUSINESS_ROLE_NAME, wait for propagation
-  wait_for_role "$QBUSINESS_ROLE_NAME"
+  # Wait for role propagation
+  wait_for_role "$ROLE_NAME"
+fi
+
+# If we don't have an INDEX_ID yet, we need to create one
+if [ -z "${INDEX_ID:-}" ]; then
+  echo "Creating Q Business index..."
+  INDEX_RESPONSE=""
+  retry 5 10 bash -c 'INDEX_RESPONSE=$(aws qbusiness create-index \
+    --application-id $APPLICATION_ID \
+    --display-name "DisabilityRightsIndex" \
+    --type "STARTER" \
+    --region $AWS_REGION \
+    --output json)'
+  if [ -z "$INDEX_RESPONSE" ]; then
+    echo "✗ Failed to create Q Business index." >&2
+    exit 1
+  fi
+  INDEX_ID=$(echo "$INDEX_RESPONSE" | jq -r '.indexId')
+  echo "✓ Created Index: $INDEX_ID"
+
+  # Wait for index to be active
+  echo "Waiting for index to be active..."
+  while true; do
+    STATUS=$(aws qbusiness get-index --application-id $APPLICATION_ID --index-id $INDEX_ID --region $AWS_REGION --query 'status' --output text)
+    if [ "$STATUS" = "ACTIVE" ]; then
+      echo "Index is ACTIVE. Waiting extra 30 seconds for full readiness..."
+      sleep 30
+      break
+    fi
+    echo "Index status: $STATUS, waiting..."
+    sleep 15
+  done
 fi
 
 # === PHASE 4: Web Experience Setup ===
@@ -419,9 +474,16 @@ echo "Uploading files from /docs to S3 bucket: $S3_BUCKET_NAME"
 aws s3 sync "$(dirname "$0")/docs" "s3://$S3_BUCKET_NAME/" --region "$AWS_REGION"
 echo "✓ Files uploaded to S3 bucket: $S3_BUCKET_NAME"
 
-# Add S3 bucket as a data source to Q Business application with retries
-echo "Adding S3 bucket as a data source to Q Business application..."
+# Check for existing S3 data source
 S3_DATA_SOURCE_NAME="DisabilityRightsS3DataSource"
+EXISTING_DATA_SOURCE_ID=$(aws qbusiness list-data-sources --application-id "$APPLICATION_ID" --index-id "$INDEX_ID" --region "$AWS_REGION" --query 'dataSources[?displayName==`'$S3_DATA_SOURCE_NAME'`].dataSourceId' --output text)
+
+if [ -n "$EXISTING_DATA_SOURCE_ID" ] && [ "$EXISTING_DATA_SOURCE_ID" != "None" ]; then
+  echo "✓ Found existing S3 data source: $EXISTING_DATA_SOURCE_ID"
+  S3_DATA_SOURCE_ID="$EXISTING_DATA_SOURCE_ID"
+else
+  # Add S3 bucket as a data source to Q Business application with retries
+  echo "Adding S3 bucket as a data source to Q Business application..."
 S3_DATA_SOURCE_CONFIG=$(cat <<EOF
 {
   "type": "S3",
@@ -451,22 +513,23 @@ S3_DATA_SOURCE_CONFIG=$(cat <<EOF
 EOF
 )
 
-S3_DATA_SOURCE_RESPONSE=""
-retry 5 10 bash -c 'S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
-  --application-id "$APPLICATION_ID" \
-  --index-id "$INDEX_ID" \
-  --display-name "$S3_DATA_SOURCE_NAME" \
-  --configuration "$S3_DATA_SOURCE_CONFIG" \
-  --role-arn "$ROLE_ARN" \
-  --region "$AWS_REGION" \
-  --output json 2>&1)'
-if [ $? -eq 0 ] && [ -n "$S3_DATA_SOURCE_RESPONSE" ]; then
-  S3_DATA_SOURCE_ID=$(echo "$S3_DATA_SOURCE_RESPONSE" | jq -r '.dataSourceId')
-  echo "✓ S3 data source added with ID: $S3_DATA_SOURCE_ID"
-else
-  echo "✗ Failed to add S3 data source after retries. Full response:" >&2
-  echo "$S3_DATA_SOURCE_RESPONSE" >&2
-  exit 1
+  S3_DATA_SOURCE_RESPONSE=""
+  retry 5 10 bash -c 'S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
+    --application-id "$APPLICATION_ID" \
+    --index-id "$INDEX_ID" \
+    --display-name "$S3_DATA_SOURCE_NAME" \
+    --configuration "$S3_DATA_SOURCE_CONFIG" \
+    --role-arn "$ROLE_ARN" \
+    --region "$AWS_REGION" \
+    --output json 2>&1)'
+  if [ $? -eq 0 ] && [ -n "$S3_DATA_SOURCE_RESPONSE" ]; then
+    S3_DATA_SOURCE_ID=$(echo "$S3_DATA_SOURCE_RESPONSE" | jq -r '.dataSourceId')
+    echo "✓ S3 data source added with ID: $S3_DATA_SOURCE_ID"
+  else
+    echo "✗ Failed to add S3 data source after retries. Full response:" >&2
+    echo "$S3_DATA_SOURCE_RESPONSE" >&2
+    exit 1
+  fi
 fi
 
 echo "📋 Q Business Setup Updated:"
