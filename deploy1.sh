@@ -357,69 +357,6 @@ if [ "$APPLICATION_ID" = "create" ]; then
     sleep 10
   fi
   
-  # Create Web Crawler data source
-  echo "Creating Web Crawler data source..."
-DATA_SOURCE_NAME="DisabilityRightsWebCrawler"
-
-# Build the JSON payload per the Web Crawler JSON schema :contentReference[oaicite:0]{index=0}
-read -r -d '' WEBCRAWLER_CONFIG <<EOF
-{
-  "type": "WEBCRAWLERV2",
-  "syncMode": "FULL_CRAWL",
-  "connectionConfiguration": {
-    "repositoryEndpointMetadata": {
-      "authentication": "NoAuthentication",
-      "seedUrlConnections": [
-        { "seedUrl": "https://disabilityrightstx.org/en/home/" }
-      ]
-    }
-  },
-  "repositoryConfigurations": {
-    "webPage": {
-      "fieldMappings": [
-        {
-          "indexFieldName": "Title",
-          "indexFieldType": "STRING",
-          "dataSourceFieldName": "htmlTitle"
-        },
-        {
-          "indexFieldName": "Url",
-          "indexFieldType": "STRING",
-          "dataSourceFieldName": "url"
-        }
-      ]
-    }
-  },
-  "additionalProperties": {
-    "crawlDepth": "3",
-    "maxLinksPerUrl": "100",
-    "crawlSubDomain": true,
-    "crawlAttachments": true
-  },
-  "version": "1.0.0"
-}
-EOF
-
-# Call the Q Business API
-if response=$(aws qbusiness create-data-source \
-      --application-id "$APPLICATION_ID" \
-      --index-id       "$INDEX_ID" \
-      --display-name   "$DATA_SOURCE_NAME" \
-      --configuration  "$WEBCRAWLER_CONFIG" \
-      --role-arn       "$ROLE_ARN" \
-      --sync-schedule  "" \
-      --region         "$AWS_REGION" \
-      --output json 2>&1); then
-
-  DATA_SOURCE_ID=$(echo "$response" | jq -r '.dataSourceId // .Id')
-  echo "✅ Web Crawler data source created with ID: $DATA_SOURCE_ID"
-
-else
-  echo "❌ Failed to create Web Crawler data source:" >&2
-  echo "$response" >&2
-  exit 1
-fi
-  
   # Create S3 bucket and upload files from /docs folder
   S3_BUCKET_NAME="${PROJECT_NAME}-docs-bucket"
   echo "Checking for S3 bucket: $S3_BUCKET_NAME"
