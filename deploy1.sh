@@ -307,9 +307,10 @@ else
     --display-name "DisabilityRightsTexas" \
     --identity-type "ANONYMOUS" \
     --region $AWS_REGION \
-    --output json)' 5 10
-  if [ -z "$APP_RESPONSE" ]; then
-    echo "✗ Failed to create Q Business application." >&2
+    --output json 2>&1)' 5 10
+  if [ -z "$APP_RESPONSE" ] || echo "$APP_RESPONSE" | grep -q 'error\|Error\|Exception'; then
+    echo "✗ Failed to create Q Business application. Full response:" >&2
+    echo "$APP_RESPONSE" >&2
     exit 1
   fi
   APPLICATION_ID=$(echo "$APP_RESPONSE" | jq -r '.applicationId')
