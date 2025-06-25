@@ -108,22 +108,6 @@ if [ -n "$EXISTING_APP_ID" ] && [ "$EXISTING_APP_ID" != "None" ]; then
   echo "✓ Found existing Q Business Application: $EXISTING_APP_ID"
   APPLICATION_ID="$EXISTING_APP_ID"
   
-  # Check if web experience is enabled in the application
-  APP_CONFIG=$(aws qbusiness get-application --application-id "$APPLICATION_ID" --region "$AWS_REGION" --output json 2>/dev/null)
-  WEB_EXPERIENCE_ENABLED=$(echo "$APP_CONFIG" | jq -r '.outcomeConfiguration.webExperienceConfiguration.webExperienceEnabled' 2>/dev/null)
-  
-  if [ "$WEB_EXPERIENCE_ENABLED" != "true" ]; then
-    echo "Updating application to enable web experience..."
-    aws qbusiness update-application \
-      --application-id "$APPLICATION_ID" \
-      --outcome-configuration '{"additionalResponsesConfiguration":{"includeDocumentTitle":true,"includeDocumentUri":true,"includeDocumentExcerpt":true},"webExperienceConfiguration":{"webExperienceEnabled":true}}' \
-      --region "$AWS_REGION" \
-      --output json > /dev/null
-    echo "✓ Web experience enabled for application"
-  else
-    echo "✓ Web experience already enabled for application"
-  fi
-  
   # Get existing index ID
   EXISTING_INDEX_ID=$(aws qbusiness list-indices --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'indices[?displayName==`DisabilityRightsIndex`].indexId' --output text)
   if [ -n "$EXISTING_INDEX_ID" ] && [ "$EXISTING_INDEX_ID" != "None" ]; then
@@ -131,14 +115,13 @@ if [ -n "$EXISTING_APP_ID" ] && [ "$EXISTING_APP_ID" != "None" ]; then
     INDEX_ID="$EXISTING_INDEX_ID"
   fi
 else
-  echo "Creating Q Business application with web experience enabled..."
+  echo "Creating Q Business application..."
   
-  # Create application with web experience enabled in outcome configuration
+  # 1. Create the application
   APP_RESPONSE=$(aws qbusiness create-application \
     --display-name "DisabilityRightsTexas" \
     --identity-type "ANONYMOUS" \
     --region "$AWS_REGION" \
-    --outcome-configuration '{"additionalResponsesConfiguration":{"includeDocumentTitle":true,"includeDocumentUri":true,"includeDocumentExcerpt":true},"webExperienceConfiguration":{"webExperienceEnabled":true}}' \
     --output json 2>&1)
   
   APPLICATION_ID=$(echo "$APP_RESPONSE" | jq -r '.applicationId')
@@ -148,7 +131,8 @@ else
   while true; do
     STATUS=$(aws qbusiness get-application --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'status' --output text)
     if [ "$STATUS" = "ACTIVE" ]; then
-      echo "Application is ACTIVE"
+      echo "Application is ACTIVE. Waiting extra 10 seconds for full readiness..."
+      sleep 10
       break
     fi
     echo "Status: $STATUS, waiting..."
@@ -184,7 +168,7 @@ fi
 echo "=== PHASE 4: Web Experience Setup ==="
 
 # Check for existing web experience
-EXISTING_WEB_EXPERIENCE_ID=$(aws qbusiness list-web-experiences --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'webExperiences[?displayName==`DisabilityRightsWeb`].webExperienceId' --output text)
+EXISTING_WEB_EXPERIENCE_ID=$(aws qbusiness list-web-experiences --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'webExperiences[0].webExperienceId' --output text 2>/dev/null)
 if [ -n "$EXISTING_WEB_EXPERIENCE_ID" ] && [ "$EXISTING_WEB_EXPERIENCE_ID" != "None" ]; then
   echo "✓ Found existing Web Experience: $EXISTING_WEB_EXPERIENCE_ID"
   WEB_EXPERIENCE_ID="$EXISTING_WEB_EXPERIENCE_ID"
@@ -195,14 +179,17 @@ else
   WEB_EXPERIENCE_RESPONSE=$(aws qbusiness create-web-experience \
     --application-id "$APPLICATION_ID" \
     --display-name "DisabilityRightsWeb" \
-    --subtitle "Disability Rights Texas Knowledge Base" \
-    --welcome-message "Welcome to Disability Rights Texas. Ask me any questions about disability rights and services." \
-    --web-experience-configuration '{"title":"Disability Rights Texas Assistant","subtitle":"Ask me about disability rights and services","welcomeMessage":"Welcome! How can I help you today?","resultDisplayFields":["DOCUMENT_TITLE","DOCUMENT_URI","DOCUMENT_EXCERPT"]}' \
+    --title "Disability Rights Texas Chat" \
     --region "$AWS_REGION" \
     --output json 2>&1)
   
-  WEB_EXPERIENCE_ID=$(echo "$WEB_EXPERIENCE_RESPONSE" | jq -r '.webExperienceId')
-  echo "✓ Created Web Experience: $WEB_EXPERIENCE_ID"
+  if echo "$WEB_EXPERIENCE_RESPONSE" | grep -q "webExperienceId"; then
+    WEB_EXPERIENCE_ID=$(echo "$WEB_EXPERIENCE_RESPONSE" | jq -r '.webExperienceId')
+    echo "✓ Created Web Experience: $WEB_EXPERIENCE_ID"
+  else
+    echo "✗ Failed to create Web Experience. Error: $WEB_EXPERIENCE_RESPONSE"
+    echo "You may need to create the web experience manually in the AWS Console."
+  fi
 fi
 
 # Wait for web experience to be active
@@ -240,6 +227,54 @@ echo "Uploading files from /docs to S3 bucket: $S3_BUCKET_NAME"
 aws s3 sync "$(dirname "$0")/docs" "s3://$S3_BUCKET_NAME/" --region "$AWS_REGION"
 echo "✓ Files uploaded to S3 bucket: $S3_BUCKET_NAME"
 
+# Create a specific IAM role for Q Business data sources
+QBUSINESS_ROLE_NAME="${PROJECT_NAME}-qbusiness-role"
+QBUSINESS_POLICY_NAME="${PROJECT_NAME}-qbusiness-policy"
+
+echo "Setting up IAM role for Q Business data sources: $QBUSINESS_ROLE_NAME"
+
+# Check if the Q Business role exists
+if aws iam get-role --role-name "$QBUSINESS_ROLE_NAME" >/dev/null 2>&1; then
+  echo "✓ Q Business IAM role exists: $QBUSINESS_ROLE_NAME"
+  QBUSINESS_ROLE_ARN=$(aws iam get-role --role-name "$QBUSINESS_ROLE_NAME" --query 'Role.Arn' --output text)
+else
+  echo "Creating Q Business IAM role: $QBUSINESS_ROLE_NAME"
+  
+  # Create trust policy for Q Business
+  QBUSINESS_TRUST_DOC='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"qbusiness.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+  
+  # Create the role
+  QBUSINESS_ROLE_RESPONSE=$(aws iam create-role \
+    --role-name "$QBUSINESS_ROLE_NAME" \
+    --assume-role-policy-document "$QBUSINESS_TRUST_DOC" \
+    --description "Role for Q Business to access S3 data sources" \
+    --output json 2>&1)
+  
+  if echo "$QBUSINESS_ROLE_RESPONSE" | grep -q "EntityAlreadyExists"; then
+    echo "✓ Q Business IAM role already exists: $QBUSINESS_ROLE_NAME"
+    QBUSINESS_ROLE_ARN=$(aws iam get-role --role-name "$QBUSINESS_ROLE_NAME" --query 'Role.Arn' --output text)
+  elif echo "$QBUSINESS_ROLE_RESPONSE" | grep -q "arn:aws:iam"; then
+    QBUSINESS_ROLE_ARN=$(echo "$QBUSINESS_ROLE_RESPONSE" | jq -r '.Role.Arn')
+    echo "✓ Created Q Business IAM role: $QBUSINESS_ROLE_NAME"
+  else
+    echo "✗ Failed to create Q Business IAM role: $QBUSINESS_ROLE_NAME"
+    echo "Error: $QBUSINESS_ROLE_RESPONSE"
+    exit 1
+  fi
+  
+  # Create policy for Q Business to access S3
+  QBUSINESS_POLICY_DOC='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject","s3:ListBucket"],"Resource":["arn:aws:s3:::'$S3_BUCKET_NAME'","arn:aws:s3:::'$S3_BUCKET_NAME'/*"]}]}'
+  
+  # Attach policy to role
+  aws iam put-role-policy \
+    --role-name "$QBUSINESS_ROLE_NAME" \
+    --policy-name "$QBUSINESS_POLICY_NAME" \
+    --policy-document "$QBUSINESS_POLICY_DOC"
+  
+  echo "Waiting for Q Business IAM role to propagate..."
+  sleep 30
+fi
+
 # Check for existing S3 data source
 S3_DATA_SOURCE_NAME="DisabilityRightsS3DataSource"
 EXISTING_DATA_SOURCE_ID=$(aws qbusiness list-data-sources --application-id "$APPLICATION_ID" --index-id "$INDEX_ID" --region "$AWS_REGION" --query 'dataSources[?displayName==`'$S3_DATA_SOURCE_NAME'`].dataSourceId' --output text)
@@ -249,6 +284,7 @@ if [ -n "$EXISTING_DATA_SOURCE_ID" ] && [ "$EXISTING_DATA_SOURCE_ID" != "None" ]
   S3_DATA_SOURCE_ID="$EXISTING_DATA_SOURCE_ID"
 else
   echo "Adding S3 bucket as a data source to Q Business application..."
+  echo "Using Q Business role ARN: $QBUSINESS_ROLE_ARN"
   S3_DATA_SOURCE_CONFIG='{
     "type": "S3",
     "syncMode": "FULL_SYNC",
@@ -275,17 +311,38 @@ else
     "version": "1.0.0"
   }'
 
-  S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
-    --application-id "$APPLICATION_ID" \
-    --index-id "$INDEX_ID" \
-    --display-name "$S3_DATA_SOURCE_NAME" \
-    --configuration "$S3_DATA_SOURCE_CONFIG" \
-    --role-arn "$ROLE_ARN" \
-    --region "$AWS_REGION" \
-    --output json 2>&1)
+  # Try to create the data source with retries
+  MAX_RETRIES=3
+  RETRY_COUNT=0
+  DATA_SOURCE_CREATED=false
   
-  S3_DATA_SOURCE_ID=$(echo "$S3_DATA_SOURCE_RESPONSE" | jq -r '.dataSourceId')
-  echo "✓ S3 data source added with ID: $S3_DATA_SOURCE_ID"
+  while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$DATA_SOURCE_CREATED" = "false" ]; do
+    S3_DATA_SOURCE_RESPONSE=$(aws qbusiness create-data-source \
+      --application-id "$APPLICATION_ID" \
+      --index-id "$INDEX_ID" \
+      --display-name "$S3_DATA_SOURCE_NAME" \
+      --configuration "$S3_DATA_SOURCE_CONFIG" \
+      --role-arn "$QBUSINESS_ROLE_ARN" \
+      --region "$AWS_REGION" \
+      --output json 2>&1)
+    
+    if echo "$S3_DATA_SOURCE_RESPONSE" | grep -q "dataSourceId"; then
+      S3_DATA_SOURCE_ID=$(echo "$S3_DATA_SOURCE_RESPONSE" | jq -r '.dataSourceId')
+      echo "✓ S3 data source added with ID: $S3_DATA_SOURCE_ID"
+      DATA_SOURCE_CREATED=true
+    else
+      RETRY_COUNT=$((RETRY_COUNT+1))
+      echo "Failed to create data source (attempt $RETRY_COUNT/$MAX_RETRIES). Error: $S3_DATA_SOURCE_RESPONSE"
+      echo "Retrying in 30 seconds..."
+      sleep 30
+    fi
+  done
+  
+  if [ "$DATA_SOURCE_CREATED" = "false" ]; then
+    echo "✗ Failed to create data source after $MAX_RETRIES attempts."
+    echo "Please check the IAM role permissions and try again."
+    echo "You can manually create the data source in the AWS Console."
+  fi
 fi
 
 echo "📋 Q Business Setup Updated:"
