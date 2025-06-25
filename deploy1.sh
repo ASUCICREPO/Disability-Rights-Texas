@@ -171,7 +171,6 @@ ROLE_NAME="${PROJECT_NAME}-codebuild-service-role"
 POLICY_NAME="${PROJECT_NAME}-deployment-policy"
 echo "Checking for IAM role: $ROLE_NAME"
 
-# Create custom policy document with specific permissions
 POLICY_DOC=$(cat <<EOF
 {
   "Version": "2012-10-17",
