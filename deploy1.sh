@@ -258,7 +258,6 @@ EOF
 if aws iam get-role --role-name "$ROLE_NAME" >/dev/null 2>&1; then
   echo "✓ IAM role exists"
   ROLE_ARN=$(aws iam get-role --role-name "$ROLE_NAME" --query 'Role.Arn' --output text)
-  # Update the policy with the specific permissions
   echo "Updating IAM policy..."
   aws iam put-role-policy \
     --role-name "$ROLE_NAME" \
@@ -274,21 +273,10 @@ else
       "Action":"sts:AssumeRole"
     }]
   }'
-  set +e
   ROLE_ARN=$(aws iam create-role \
     --role-name "$ROLE_NAME" \
     --assume-role-policy-document "$TRUST_DOC" \
-    --query 'Role.Arn' --output text 2>&1)
-  CREATE_ROLE_EXIT_CODE=$?
-  set -e
-  if [[ $CREATE_ROLE_EXIT_CODE -ne 0 && "$ROLE_ARN" == *"EntityAlreadyExists"* ]]; then
-    echo "⚠️  IAM role already exists, proceeding to update policy."
-    ROLE_ARN=$(aws iam get-role --role-name "$ROLE_NAME" --query 'Role.Arn' --output text)
-  elif [[ $CREATE_ROLE_EXIT_CODE -ne 0 ]]; then
-    echo "✗ Failed to create IAM role: $ROLE_NAME. Full response:" >&2
-    echo "$ROLE_ARN" >&2
-    exit 1
-  fi
+    --query 'Role.Arn' --output text)
   echo "Attaching custom policy..."
   aws iam put-role-policy \
     --role-name "$ROLE_NAME" \
