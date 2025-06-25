@@ -363,8 +363,51 @@ else
   wait_for_role "$QBUSINESS_ROLE_NAME"
 fi
 
-# === PHASE 4: S3 Data Source Setup ===
-echo "=== PHASE 4: S3 Data Source Setup ==="
+# === PHASE 4: Web Experience Setup ===
+echo "=== PHASE 4: Web Experience Setup ==="
+
+# Check for existing web experience
+EXISTING_WEB_EXPERIENCE_ID=$(aws qbusiness list-web-experiences --application-id "$APPLICATION_ID" --region "$AWS_REGION" --query 'webExperiences[?displayName==`DisabilityRightsWeb`].webExperienceId' --output text)
+if [ -n "$EXISTING_WEB_EXPERIENCE_ID" ] && [ "$EXISTING_WEB_EXPERIENCE_ID" != "None" ]; then
+  echo "✓ Found existing Web Experience: $EXISTING_WEB_EXPERIENCE_ID"
+  WEB_EXPERIENCE_ID="$EXISTING_WEB_EXPERIENCE_ID"
+else
+  echo "Creating Web Experience..."
+  WEB_EXPERIENCE_RESPONSE=""
+  retry 5 10 bash -c 'WEB_EXPERIENCE_RESPONSE=$(aws qbusiness create-web-experience \
+    --application-id "$APPLICATION_ID" \
+    --display-name "DisabilityRightsWeb" \
+    --region "$AWS_REGION" \
+    --output json 2>&1)'
+  if [ -z "$WEB_EXPERIENCE_RESPONSE" ] || echo "$WEB_EXPERIENCE_RESPONSE" | grep -q 'error\|Error\|Exception'; then
+    echo "✗ Failed to create Web Experience. Full response:" >&2
+    echo "$WEB_EXPERIENCE_RESPONSE" >&2
+    exit 1
+  fi
+  WEB_EXPERIENCE_ID=$(echo "$WEB_EXPERIENCE_RESPONSE" | jq -r '.webExperienceId')
+  echo "✓ Created Web Experience: $WEB_EXPERIENCE_ID"
+fi
+
+# Wait for web experience to be active
+if [ -n "$WEB_EXPERIENCE_ID" ]; then
+  echo "Waiting for web experience to be active..."
+  while true; do
+    WEB_STATUS=$(aws qbusiness get-web-experience --application-id "$APPLICATION_ID" --web-experience-id "$WEB_EXPERIENCE_ID" --region "$AWS_REGION" --query 'status' --output text)
+    if [ "$WEB_STATUS" = "ACTIVE" ]; then
+      echo "Web experience is ACTIVE. Waiting extra 30 seconds for full readiness..."
+      sleep 30
+      break
+    fi
+    echo "Web experience status: $WEB_STATUS, waiting..."
+    sleep 10
+  done
+  # Output the web experience URL
+  WEB_URL=$(aws qbusiness get-web-experience --application-id "$APPLICATION_ID" --web-experience-id "$WEB_EXPERIENCE_ID" --region "$AWS_REGION" --query 'defaultDomain' --output text)
+  echo "Web Experience URL: $WEB_URL"
+fi
+
+# === PHASE 5: S3 Data Source Setup ===
+echo "=== PHASE 5: S3 Data Source Setup ==="
 
 # Create S3 bucket and upload files from /docs folder
 S3_BUCKET_NAME="${PROJECT_NAME}-docs-bucket"
@@ -436,7 +479,7 @@ echo "   Application ID: $APPLICATION_ID"
 echo "   Index ID: $INDEX_ID"
 echo "   S3 Data Source ID: $S3_DATA_SOURCE_ID"
 
-# === PHASE 5: CodeBuild Project Setup ===
+# === PHASE 6: CodeBuild Project Setup ===
 
 # Create CodeBuild project
 CODEBUILD_PROJECT_NAME="${PROJECT_NAME}-deploy"
